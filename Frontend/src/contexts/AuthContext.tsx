@@ -12,6 +12,7 @@ import type { AuthUser, LoginCredentials } from '../types/auth';
 // ── Access token en memoria — nunca en localStorage (seguro vs XSS) ──────────
 let _accessToken: string | null = null;
 export function getAccessToken(): string | null { return _accessToken; }
+export function setAccessToken(token: string | null) { _accessToken = token; }
 
 // ── Helpers JWT ──────────────────────────────────────────────────────────────
 function decodeJwt(token: string): Record<string, unknown> {
@@ -25,7 +26,11 @@ function jwtToUser(p: Record<string, unknown>): AuthUser {
     username:    p['username']   as string,
     nombre:      p['nombre']     as string,
     correo:      null,
-    rol:         { id: p['rol_id'] as number, nombre: p['rol_nombre'] as string, permisos: null },
+    rol: {
+      id:       p['rol_id']   as number,
+      nombre:   p['rol_nombre'] as string,
+      permisos: (p['permisos'] as string | null) ?? null,
+    },
     empresa_id:  p['empresa_id']  as number,
     sucursal_id: p['sucursal_id'] as number | null,
   };

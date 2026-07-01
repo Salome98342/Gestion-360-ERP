@@ -1,20 +1,27 @@
 from rest_framework import viewsets
 
+from apps.usuarios.permissions import RolPermission
 from .models import Empresa, LicenciaToken, RenovacionLicencia
 from .serializers import EmpresaSerializer, LicenciaTokenSerializer, RenovacionLicenciaSerializer
 
 
 class EmpresaViewSet(viewsets.ModelViewSet):
-    queryset = Empresa.objects.all()
-    serializer_class = EmpresaSerializer
+    modulo             = 'empresas'
+    permission_classes = [RolPermission]
+    queryset           = Empresa.objects.all()
+    serializer_class   = EmpresaSerializer
 
 
 class LicenciaTokenViewSet(viewsets.ModelViewSet):
-    queryset = LicenciaToken.objects.all()
-    serializer_class = LicenciaTokenSerializer
+    modulo             = 'empresas'
+    permission_classes = [RolPermission]
+    queryset           = LicenciaToken.objects.all()
+    serializer_class   = LicenciaTokenSerializer
 
 
 class RenovacionLicenciaViewSet(viewsets.ModelViewSet):
-    queryset = RenovacionLicencia.objects.all()
-    serializer_class = RenovacionLicenciaSerializer
+    modulo             = 'empresas'
+    permission_classes = [RolPermission]
+    queryset           = RenovacionLicencia.objects.all()
+    serializer_class   = RenovacionLicenciaSerializer
 

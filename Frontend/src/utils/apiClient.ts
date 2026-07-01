@@ -1,25 +1,26 @@
-import { getAccessToken } from '../contexts/AuthContext';
+import { getAccessToken, setAccessToken } from '../contexts/AuthContext';
 import { authService } from '../services/authService';
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL as string;
 
-// ── Deduplicación de refresco ────────────────────────────────────────────────
-// Si varios requests llegan simultáneamente con token expirado, solo se hace
-// un refresh y todos los demás esperan el mismo Promise.
-let _refreshPromise: Promise<string> | null = null;
+// ── Refresco deduplicado ──────────────────────────────────────────────────────
+// Un único Promise compartido para todos los requests que necesiten refrescar
+// el token al mismo tiempo (evita múltiples llamadas a /auth/refresh/).
+let _pendingRefresh: Promise<string> | null = null;
+
+function refreshAccessToken(): Promise<string> {
+  if (_pendingRefresh) return _pendingRefresh;
+  _pendingRefresh = authService
+    .refresh()
+    .then(({ access }) => { setAccessToken(access); return access; })
+    .finally(() => { _pendingRefresh = null; });
+  return _pendingRefresh;
+}
 
 async function getValidToken(): Promise<string | null> {
   const existing = getAccessToken();
   if (existing) return existing;
-
-  if (_refreshPromise) return _refreshPromise;
-
-  _refreshPromise = authService
-    .refresh()
-    .then(({ access }) => access)
-    .finally(() => { _refreshPromise = null; });
-
-  return _refreshPromise;
+  try { return await refreshAccessToken(); } catch { return null; }
 }
 
 // ── Cliente HTTP autenticado ─────────────────────────────────────────────────
@@ -41,19 +42,23 @@ async function request<T>(method: Method, path: string, body?: unknown): Promise
 
   let response = await fetch(`${BASE_URL}${path}`, init);
 
-  // Token expirado → refresco automático + reintento único
+  // Token expirado → refresco único compartido + reintento
   if (response.status === 401) {
     try {
-      const { access } = await authService.refresh();
-      const retryHeaders = { ...headers, Authorization: `Bearer ${access}` };
-      response = await fetch(`${BASE_URL}${path}`, { ...init, headers: retryHeaders });
+      const newToken = await refreshAccessToken();
+      response = await fetch(`${BASE_URL}${path}`, {
+        ...init,
+        headers: { ...headers, Authorization: `Bearer ${newToken}` },
+      });
     } catch {
+      setAccessToken(null);
       window.location.href = '/login';
       throw new Error('Sesión expirada. Redirigiendo al login...');
     }
   }
 
   if (response.status === 401) {
+    setAccessToken(null);
     window.location.href = '/login';
     throw new Error('Sesión expirada.');
   }

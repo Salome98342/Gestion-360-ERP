@@ -146,11 +146,11 @@ STATIC_URL = 'static/'
 
 
 REST_FRAMEWORK = {
+    # Autenticador personalizado que resuelve el usuario desde apps.usuarios.Usuario
+    # en lugar de Django auth.User (que no se usa en este proyecto).
     'DEFAULT_AUTHENTICATION_CLASSES': (
-        'rest_framework_simplejwt.authentication.JWTAuthentication',
+        'apps.usuarios.authentication.UsuarioJWTAuthentication',
     ),
-    # Para que el admin / listas del frontend funcionen sin token.
-    # Si tu sistema requiere auth, regrésalo a IsAuthenticated.
     'DEFAULT_PERMISSION_CLASSES': (
         'rest_framework.permissions.AllowAny',
     ),

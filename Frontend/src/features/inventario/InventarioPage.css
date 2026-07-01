@@ -1,0 +1,6 @@
+@import '../../styles/erp-module.css';
+
+/* Stock badge colors */
+.stock-ok   { color: #4ade80; font-weight: 700; }
+.stock-low  { color: #fbbf24; font-weight: 700; }
+.stock-zero { color: #f87171; font-weight: 700; }

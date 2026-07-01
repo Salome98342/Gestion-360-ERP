@@ -60,21 +60,21 @@ router.register(r'categorias', CategoriaViewSet)
 router.register(r'tipos-clientes', TipoClienteViewSet)
 router.register(r'clientes', ClienteViewSet)
 router.register(r'proveedores', ProveedorViewSet)
-router.register(r'productos', ProductoViewSet)
+router.register(r'productos', ProductoViewSet, basename='producto')
 router.register(r'cajas', CajaViewSet)
 
 # Ventas / Compras / Movimientos
-router.register(r'compras', CompraViewSet)
+router.register(r'compras', CompraViewSet, basename='compra')
 router.register(r'items-compras', ItemCompraViewSet)
 router.register(r'pagos-proveedores', PagoProveedorViewSet)
-router.register(r'ventas', VentaViewSet)
+router.register(r'ventas', VentaViewSet, basename='venta')
 router.register(r'items-ventas', ItemVentaViewSet)
 router.register(r'abonos', AbonoViewSet)
 
 router.register(r'kardex', KardexViewSet)
 router.register(r'movimiento-caja', MovimientoCajaViewSet)
 router.register(r'auditoria-descuento', AuditoriaDescuentoViewSet)
-router.register(r'log-actividad', LogActividadViewSet)
+router.register(r'log-actividad', LogActividadViewSet, basename='log-actividad')
 router.register(r'secuencias', SecuenciasViewSet)
 
 urlpatterns = [

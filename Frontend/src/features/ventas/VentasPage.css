@@ -1,0 +1,145 @@
+@import '../../styles/erp-module.css';
+
+.venta-form {
+	gap: 18px;
+}
+
+.venta-section {
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+}
+
+.venta-section__header {
+	display: flex;
+	align-items: flex-end;
+	justify-content: space-between;
+	gap: 12px;
+	flex-wrap: wrap;
+}
+
+.venta-section__title {
+	margin: 0;
+	color: #e2e8f0;
+	font-size: 0.88rem;
+	font-weight: 700;
+}
+
+.venta-section__subtitle {
+	margin: 4px 0 0;
+	color: #64748b;
+	font-size: 0.75rem;
+}
+
+.venta-items {
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+}
+
+.venta-item {
+	display: grid;
+	grid-template-columns: 1.05fr 1.1fr 0.55fr 0.75fr 0.75fr 0.95fr;
+	gap: 10px;
+	padding: 12px;
+	border: 1px solid rgba(255, 255, 255, 0.08);
+	border-radius: 12px;
+	background: rgba(255, 255, 255, 0.02);
+}
+
+.venta-item__meta {
+	display: grid;
+	grid-template-columns: 1fr auto auto;
+	gap: 10px;
+	align-items: end;
+}
+
+.venta-item__summary {
+	min-width: 94px;
+	display: flex;
+	flex-direction: column;
+	gap: 5px;
+	padding: 9px 12px;
+	border: 1px solid rgba(255, 255, 255, 0.08);
+	border-radius: 8px;
+	background: rgba(9, 21, 43, 0.55);
+}
+
+.venta-item__summary span {
+	color: #64748b;
+	font-size: 0.64rem;
+	font-weight: 700;
+	letter-spacing: 0.6px;
+	text-transform: uppercase;
+}
+
+.venta-item__summary strong {
+	color: #e2e8f0;
+	font-size: 0.84rem;
+}
+
+.venta-item__remove {
+	margin-bottom: 1px;
+}
+
+.venta-summary {
+	display: grid;
+	grid-template-columns: repeat(3, minmax(0, 1fr));
+	gap: 10px;
+}
+
+.venta-summary__card {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	padding: 12px 14px;
+	border-radius: 12px;
+	border: 1px solid rgba(255, 255, 255, 0.08);
+	background: rgba(255, 255, 255, 0.03);
+}
+
+.venta-summary__card span {
+	color: #64748b;
+	font-size: 0.64rem;
+	font-weight: 700;
+	letter-spacing: 0.6px;
+	text-transform: uppercase;
+}
+
+.venta-summary__card strong {
+	color: #e2e8f0;
+	font-size: 0.98rem;
+}
+
+.venta-summary__card--accent {
+	background: linear-gradient(135deg, rgba(37, 99, 235, 0.22), rgba(13, 148, 136, 0.16));
+	border-color: rgba(37, 99, 235, 0.22);
+}
+
+.venta-modal {
+	max-width: 1040px;
+}
+
+@media (max-width: 1120px) {
+	.venta-item {
+		grid-template-columns: 1fr 1fr;
+	}
+
+	.venta-item__meta {
+		grid-column: 1 / -1;
+	}
+}
+
+@media (max-width: 760px) {
+	.venta-summary {
+		grid-template-columns: 1fr;
+	}
+
+	.venta-item {
+		grid-template-columns: 1fr;
+	}
+
+	.venta-item__meta {
+		grid-template-columns: 1fr;
+	}
+}

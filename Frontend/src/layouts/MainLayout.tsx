@@ -2,6 +2,7 @@ import { Outlet, NavLink, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard,
   ShoppingCart,
+  ShoppingBag,
   Package,
   Users,
   Building2,
@@ -12,33 +13,29 @@ import {
   ChevronRight,
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
+import { canView } from '../utils/permissions';
+import type { ModuleKey } from '../types/usuarios';
 import logo360 from '../assets/Logo.png';
 import './MainLayout.css';
 
-const NAV_GROUPS = [
-  {
-    label: 'Principal',
-    items: [{ to: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' }],
-  },
-  {
-    label: 'Operaciones',
-    items: [
-      { to: '/ventas',     icon: ShoppingCart, label: 'Ventas'     },
-      { to: '/inventario', icon: Package,      label: 'Inventario' },
-    ],
-  },
-  {
-    label: 'Administración',
-    items: [
-      { to: '/usuarios', icon: Users,     label: 'Usuarios' },
-      { to: '/empresas', icon: Building2, label: 'Empresas' },
-    ],
-  },
-  {
-    label: 'Reportes',
-    items: [{ to: '/reportes', icon: BarChart3, label: 'Análisis' }],
-  },
-] as const;
+// ── Definición de navegación con módulo requerido ──────────────────────────
+// modulo: null  → siempre visible (sin restricción de permiso)
+// modulo: string → solo visible si can(user, modulo, 'ver') === true
+const ALL_NAV_ITEMS: {
+  group: string;
+  to:    string;
+  icon:  React.ElementType;
+  label: string;
+  modulo: ModuleKey | null;
+}[] = [
+  { group: 'Principal',      to: '/dashboard', icon: LayoutDashboard, label: 'Dashboard',   modulo: null           },
+  { group: 'Operaciones',    to: '/ventas',     icon: ShoppingCart, label: 'Ventas',      modulo: 'ventas'     },
+  { group: 'Operaciones',    to: '/compras',    icon: ShoppingBag,  label: 'Compras',     modulo: 'compras'    },
+  { group: 'Operaciones',    to: '/inventario', icon: Package,      label: 'Inventario',  modulo: 'inventario' },
+  { group: 'Administración', to: '/usuarios',  icon: Users,           label: 'Usuarios',     modulo: 'usuarios'     },
+  { group: 'Administración', to: '/empresas',  icon: Building2,       label: 'Empresas',     modulo: 'empresas'     },
+  { group: 'Reportes',       to: '/reportes',  icon: BarChart3,       label: 'Análisis',     modulo: 'reportes'     },
+];
 
 export default function MainLayout() {
   const { user, logout } = useAuth();
@@ -50,6 +47,12 @@ export default function MainLayout() {
   };
 
   const initials = user?.nombre?.charAt(0).toUpperCase() ?? 'U';
+
+  // Filtrar items por permiso y agrupar
+  const visibleItems = ALL_NAV_ITEMS.filter(item =>
+    item.modulo === null || canView(user, item.modulo)
+  );
+  const groups = [...new Set(visibleItems.map(i => i.group))];
 
   return (
     <div className="erp-app">
@@ -65,10 +68,10 @@ export default function MainLayout() {
         </div>
 
         <nav className="erp-sidebar__nav" aria-label="Navegación principal">
-          {NAV_GROUPS.map((group) => (
-            <div className="erp-nav-group" key={group.label}>
-              <span className="erp-nav-group__label">{group.label}</span>
-              {group.items.map(({ to, icon: Icon, label }) => (
+          {groups.map(group => (
+            <div className="erp-nav-group" key={group}>
+              <span className="erp-nav-group__label">{group}</span>
+              {visibleItems.filter(i => i.group === group).map(({ to, icon: Icon, label }) => (
                 <NavLink
                   key={to}
                   to={to}

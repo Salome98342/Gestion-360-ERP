@@ -1,6 +1,7 @@
 from django.conf import settings
-from django.contrib.auth.hashers import check_password
+from django.contrib.auth.hashers import check_password, make_password
 from rest_framework import viewsets, status
+from rest_framework.decorators import action
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -8,24 +9,60 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.exceptions import TokenError
 
 from .models import Sucursal, Rol, Usuario
-from .serializers import SucursalSerializer, RolSerializer, UsuarioSerializer
+from .permissions import RolPermission
+from .serializers import (
+    SucursalSerializer, RolSerializer,
+    UsuarioReadSerializer, UsuarioWriteSerializer,
+)
 
 
 # ── ViewSets CRUD ────────────────────────────────────────────────────────────
 
 class SucursalViewSet(viewsets.ModelViewSet):
-    queryset = Sucursal.objects.all()
-    serializer_class = SucursalSerializer
+    modulo             = 'usuarios'
+    permission_classes = [RolPermission]
+    queryset           = Sucursal.objects.all()
+    serializer_class   = SucursalSerializer
 
 
 class RolViewSet(viewsets.ModelViewSet):
-    queryset = Rol.objects.all()
-    serializer_class = RolSerializer
+    modulo             = 'usuarios'
+    permission_classes = [RolPermission]
+    queryset           = Rol.objects.all()
+    serializer_class   = RolSerializer
 
 
 class UsuarioViewSet(viewsets.ModelViewSet):
-    queryset = Usuario.objects.all()
-    serializer_class = UsuarioSerializer
+    modulo             = 'usuarios'
+    permission_classes = [RolPermission]
+    queryset           = Usuario.objects.select_related('rol', 'sucursal').all()
+
+    def get_serializer_class(self):
+        if self.action in ('create', 'update', 'partial_update'):
+            return UsuarioWriteSerializer
+        return UsuarioReadSerializer
+
+    @action(detail=True, methods=['patch'], url_path='toggle-activo')
+    def toggle_activo(self, request, pk=None):
+        """Activa o desactiva el perfil del usuario."""
+        usuario = self.get_object()
+        usuario.activo = 0 if usuario.activo else 1
+        usuario.save(update_fields=['activo'])
+        return Response({'id': usuario.id, 'activo': usuario.activo})
+
+    @action(detail=True, methods=['patch'], url_path='set-password')
+    def set_password(self, request, pk=None):
+        """Cambia la contraseña del usuario sin exponer otros datos."""
+        password = request.data.get('password', '').strip()
+        if not password or len(password) < 6:
+            return Response(
+                {'error': 'La contraseña debe tener al menos 6 caracteres.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        usuario = self.get_object()
+        usuario.password = make_password(password)
+        usuario.save(update_fields=['password'])
+        return Response({'message': 'Contraseña actualizada correctamente.'})
 
 
 # ── Helpers de autenticación ─────────────────────────────────────────────────
@@ -38,6 +75,7 @@ def _build_tokens(user: Usuario) -> RefreshToken:
     refresh['nombre']      = user.nombre
     refresh['rol_id']      = user.rol_id
     refresh['rol_nombre']  = user.rol.nombre
+    refresh['permisos']    = user.rol.permisos or ''
     refresh['empresa_id']  = user.empresa_id
     refresh['sucursal_id'] = user.sucursal_id
     return refresh

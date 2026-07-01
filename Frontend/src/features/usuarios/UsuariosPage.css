@@ -1,0 +1,119 @@
+@import '../../styles/erp-module.css';
+
+/* Usuarios-specific styles only. Base ERP styles live in erp-module.css */
+
+/* Permissions matrix */
+.perm-label {
+  font-size: 0.64rem;
+  font-weight: 700;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  color: #4a5568;
+  margin-bottom: 8px;
+}
+
+.perm-matrix-wrap {
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.perm-matrix {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.perm-matrix th {
+  padding: 8px 10px;
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: #374151;
+  text-align: center;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.perm-matrix th:first-child {
+  text-align: left;
+  padding-left: 14px;
+}
+
+.perm-matrix td {
+  padding: 8px 10px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  text-align: center;
+  vertical-align: middle;
+}
+
+.perm-matrix td:first-child {
+  text-align: left;
+  padding-left: 14px;
+  color: #94a3b8;
+  font-size: 0.82rem;
+}
+
+.perm-matrix tr:last-child td {
+  border-bottom: none;
+}
+
+.perm-matrix tr:hover td {
+  background: rgba(255, 255, 255, 0.015);
+}
+
+.perm-cb {
+  appearance: none;
+  width: 15px;
+  height: 15px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.04);
+  cursor: pointer;
+  position: relative;
+  transition: background 0.15s, border-color 0.15s;
+  vertical-align: middle;
+}
+
+.perm-cb:checked {
+  background: #2563eb;
+  border-color: #2563eb;
+}
+
+.perm-cb:checked::after {
+  content: '';
+  position: absolute;
+  left: 3.5px;
+  top: 1px;
+  width: 4px;
+  height: 8px;
+  border: 2px solid #fff;
+  border-top: none;
+  border-left: none;
+  transform: rotate(45deg);
+}
+
+/* Log table */
+.log-action {
+  display: inline-block;
+  padding: 2px 8px;
+  background: rgba(37, 99, 235, 0.1);
+  color: #60a5fa;
+  border-radius: 4px;
+  font-size: 0.72rem;
+  font-weight: 600;
+}
+
+.log-module {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #0ea5e9;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.log-date {
+  font-size: 0.76rem;
+  color: #374151;
+  white-space: nowrap;
+}
