@@ -1,0 +1,452 @@
+-- =============================================================================
+-- SCRIPT DE PRUEBAS COMPLETO - SISTEMA ERP MULTITENANT
+-- Cubre: seed de datos, verificación de triggers y consultas de validación
+-- Tenants: 2 empresas independientes (aislamiento multitenant)
+-- =============================================================================
+
+-- =============================================================================
+-- SECCIÓN 0: LIMPIEZA PREVIA (orden inverso de dependencias)
+-- =============================================================================
+
+TRUNCATE TABLE log_actividad, auditoria_descuento, movimiento_caja, kardex,
+    abono, pago_proveedor, item_venta, item_compra,
+    venta, compra, caja, producto, proveedor, cliente, tipo_cliente, categoria,
+    usuario, rol, sucursal, renovacion_licencia, licencia_token, secuencias, empresa
+RESTART IDENTITY CASCADE;
+
+
+-- =============================================================================
+-- SECCIÓN 1: SEED DE DATOS - MÓDULO SAAS (empresas y licencias)
+-- =============================================================================
+
+-- Empresa 1: Tienda de abarrotes
+INSERT INTO empresa (nombre, nit, direccion, telefono, moneda, porcentaje_impuesto, activa)
+VALUES ('Abarrotes El Palo', '900123456-1', 'Cra 5 #10-20, Caicedonia', '3101112233', 'COP', 19.0, 1);
+
+-- Empresa 2: Ferretería
+INSERT INTO empresa (nombre, nit, direccion, telefono, moneda, porcentaje_impuesto, activa)
+VALUES ('Ferretería Los Andes', '800987654-2', 'Cl 8 #3-15, Sevilla', '3209998877', 'COP', 19.0, 1);
+
+-- Licencias
+INSERT INTO licencia_token (empresa_id, token, fecha_activacion, fecha_vencimiento, estado)
+VALUES
+    (1, 'TOKEN-ABARROTES-2025-ACTIVA', NOW(), NOW() + INTERVAL '12 months', 'ACTIVA'),
+    (2, 'TOKEN-FERRETERIA-2025-ACTIVA', NOW(), NOW() + INTERVAL '6 months',  'ACTIVA');
+
+-- Secuencias de numeración por empresa
+INSERT INTO secuencias (empresa_id, tipo, ultimo_numero)
+VALUES
+    (1, 'VENTA',  0),
+    (1, 'COMPRA', 0),
+    (2, 'VENTA',  0),
+    (2, 'COMPRA', 0);
+
+
+-- =============================================================================
+-- SECCIÓN 2: SEED - ESTRUCTURA INTERNA (sucursales, roles, usuarios)
+-- =============================================================================
+
+-- Sucursales
+INSERT INTO sucursal (empresa_id, nombre, direccion, activa) VALUES
+    (1, 'Sede Principal Caicedonia', 'Cra 5 #10-20', 1),
+    (1, 'Sede Norte',               'Cl 2 #1-10',   1),
+    (2, 'Local Central Sevilla',    'Cl 8 #3-15',   1);
+
+-- Roles
+INSERT INTO rol (empresa_id, nombre, permisos) VALUES
+    (1, 'Administrador', 'ALL'),
+    (1, 'Vendedor',      'VENTAS,CLIENTES'),
+    (2, 'Administrador', 'ALL'),
+    (2, 'Cajero',        'VENTAS,CAJA');
+
+-- Usuarios
+INSERT INTO usuario (empresa_id, sucursal_id, rol_id, nombre, cedula, correo, username, password, activo) VALUES
+    (1, 1, 1, 'Carlos Gómez',    '1234567',  'carlos@abarrotes.co',   'cgomez',   'hash_bcrypt_1', 1),
+    (1, 1, 2, 'Ana Martínez',    '2345678',  'ana@abarrotes.co',      'amartinez','hash_bcrypt_2', 1),
+    (1, 2, 2, 'Luis Herrera',    '3456789',  'luis@abarrotes.co',     'lherrera', 'hash_bcrypt_3', 1),
+    (2, 3, 3, 'Pedro Salcedo',   '4567890',  'pedro@ferreteria.co',   'psalcedo', 'hash_bcrypt_4', 1),
+    (2, 3, 4, 'Marta Ospina',    '5678901',  'marta@ferreteria.co',   'mospina',  'hash_bcrypt_5', 1);
+
+
+-- =============================================================================
+-- SECCIÓN 3: SEED - CATÁLOGOS (categorías, clientes, proveedores, productos)
+-- =============================================================================
+
+-- Categorías
+INSERT INTO categoria (empresa_id, nombre, descripcion, activa) VALUES
+    (1, 'Lácteos',      'Leche, queso, mantequilla',    1),
+    (1, 'Granos',       'Arroz, frijol, lenteja',       1),
+    (1, 'Aseo',         'Productos de limpieza',        1),
+    (2, 'Herramientas', 'Martillos, destornilladores',  1),
+    (2, 'Eléctricos',   'Cables, tomas, breakers',      1),
+    (2, 'Plomería',     'Tubos, uniones, válvulas',     1);
+
+-- Tipos de cliente
+INSERT INTO tipo_cliente (empresa_id, nombre, limite_credito, dias_credito, descuento_por_defecto) VALUES
+    (1, 'Contado',       0,       0,  0),
+    (1, 'Crédito 30d',   500000,  30, 0),
+    (2, 'Contado',       0,       0,  0),
+    (2, 'Crédito 60d',   2000000, 60, 5);
+
+-- Clientes
+INSERT INTO cliente (empresa_id, nombre, telefono, tipo_cliente_id, saldo_actual, activo) VALUES
+    (1, 'Tienda La Esquina',   '3111111111', 2, 0, 1),
+    (1, 'Supermercado Rápido', '3122222222', 2, 0, 1),
+    (1, 'Consumidor Final',    NULL,         1, 0, 1),
+    (2, 'Construimos S.A.S',   '3133333333', 4, 0, 1),
+    (2, 'Obras Rápidas Ltda',  '3144444444', 4, 0, 1),
+    (2, 'Cliente Mostrador',   NULL,         3, 0, 1);
+
+-- Proveedores
+INSERT INTO proveedor (empresa_id, nombre, nit, telefono, activo) VALUES
+    (1, 'Distribuidora Central', '700111222-1', '6041234567', 1),
+    (1, 'Lácteos del Valle',     '700333444-2', '6047654321', 1),
+    (2, 'Importadora Herrajes',  '700555666-3', '6044441122', 1),
+    (2, 'Eléctricos del Eje',    '700777888-4', '6045553344', 1);
+
+-- Productos (empresa 1 - abarrotes, sucursal 1)
+INSERT INTO producto (empresa_id, categoria_id, nombre, precio_venta, costo_promedio, stock_actual, sucursal_id, proveedor_id, activo) VALUES
+    (1, 1, 'Leche entera x1L',      2800,  2100, 0, 1, 2, 1),
+    (1, 1, 'Queso campesino 500g',   8500,  6000, 0, 1, 2, 1),
+    (1, 2, 'Arroz Diana 5kg',        18000, 14000, 0, 1, 1, 1),
+    (1, 2, 'Frijol bola roja 1kg',   5500,  4000, 0, 1, 1, 1),
+    (1, 3, 'Jabón Rey x3',           4200,  3000, 0, 1, 1, 1);
+
+-- Productos (empresa 1 - sucursal 2)
+INSERT INTO producto (empresa_id, categoria_id, nombre, precio_venta, costo_promedio, stock_actual, sucursal_id, proveedor_id, activo) VALUES
+    (1, 2, 'Arroz Diana 5kg',  18000, 14000, 0, 2, 1, 1);
+
+-- Productos (empresa 2 - ferretería, sucursal 3)
+INSERT INTO producto (empresa_id, categoria_id, nombre, precio_venta, costo_promedio, stock_actual, sucursal_id, proveedor_id, activo) VALUES
+    (2, 4, 'Martillo 16oz',        35000, 25000, 0, 3, 3, 1),
+    (2, 4, 'Destornillador plano', 12000,  8000, 0, 3, 3, 1),
+    (2, 5, 'Cable encauchetado 3x12 (m)', 4500, 3000, 0, 3, 4, 1),
+    (2, 6, 'Tubo PVC 1/2" x3m',   8000,  5500, 0, 3, 3, 1);
+
+
+-- =============================================================================
+-- SECCIÓN 4: SEED - APERTURA DE CAJA
+-- =============================================================================
+
+INSERT INTO caja (empresa_id, sucursal_id, usuario_id, fecha_apertura, monto_inicial, estado) VALUES
+    (1, 1, 1, NOW(), 200000, 'ABIERTA'),
+    (2, 3, 4, NOW(), 500000, 'ABIERTA');
+
+
+-- =============================================================================
+-- SECCIÓN 5: PRUEBA TRIGGER T1 - COMPRAS E INVENTARIO (costo promedio + kardex)
+-- =============================================================================
+-- Escenario: Empresa 1 realiza una compra con 3 productos.
+-- Verificar: stock_actual sube, costo_promedio se recalcula, kardex se inserta.
+
+-- Estado inicial del stock (debería ser 0 para todos)
+SELECT 'PRE-COMPRA empresa 1' AS momento, id, nombre, stock_actual, costo_promedio
+FROM producto WHERE empresa_id = 1 AND sucursal_id = 1 ORDER BY id;
+
+INSERT INTO compra (empresa_id, proveedor_id, sucursal_id, usuario_id, fecha, subtotal, impuesto, total, estado, saldo_pendiente)
+VALUES (1, 1, 1, 1, NOW(), 420000, 79800, 499800, 'PENDIENTE', 499800);
+
+-- Items de compra: el trigger T1 se dispara por cada INSERT
+INSERT INTO item_compra (compra_id, producto_id, cantidad, costo_unitario, subtotal) VALUES
+    (1, 3, 100, 14000, 1400000),  -- 100 bolsas arroz
+    (1, 4,  50,  4000,  200000),  -- 50 frijol
+    (1, 5,  30,  3000,   90000);  -- 30 jabón
+
+-- Verificar post-compra: stock y costo promedio actualizados
+SELECT 'POST-COMPRA empresa 1' AS momento, id, nombre, stock_actual, costo_promedio
+FROM producto WHERE empresa_id = 1 AND sucursal_id = 1 ORDER BY id;
+
+-- Verificar kardex generado por T1
+SELECT 'KARDEX compra' AS check_, k.tipo_movimiento, p.nombre, k.cantidad,
+       k.stock_anterior, k.stock_resultante, k.referencia
+FROM kardex k JOIN producto p ON p.id = k.producto_id
+WHERE k.empresa_id = 1
+ORDER BY k.id;
+
+-- Compra empresa 1 con lácteos (proveedor 2)
+INSERT INTO compra (empresa_id, proveedor_id, sucursal_id, usuario_id, fecha, subtotal, impuesto, total, estado, saldo_pendiente)
+VALUES (1, 2, 1, 1, NOW(), 285000, 54150, 339150, 'PENDIENTE', 339150);
+
+INSERT INTO item_compra (compra_id, producto_id, cantidad, costo_unitario, subtotal) VALUES
+    (2, 1, 60, 2100, 126000),   -- 60 leches
+    (2, 2, 15, 6000,  90000);   -- 15 quesos
+
+-- Compra empresa 2 (ferretería)
+INSERT INTO compra (empresa_id, proveedor_id, sucursal_id, usuario_id, fecha, subtotal, impuesto, total, estado, saldo_pendiente)
+VALUES (2, 3, 3, 4, NOW(), 1050000, 199500, 1249500, 'PENDIENTE', 1249500);
+
+INSERT INTO item_compra (compra_id, producto_id, cantidad, costo_unitario, subtotal) VALUES
+    (3, 7, 20, 25000, 500000),  -- 20 martillos
+    (3, 8, 30,  8000, 240000),  -- 30 destornilladores
+    (3, 9, 50,  3000, 150000),  -- 50 m cable
+    (3,10, 20,  5500, 110000);  -- 20 tubos PVC
+
+-- =============================================================================
+-- PRUEBA DE COSTO PROMEDIO PONDERADO (segunda compra del mismo producto)
+-- =============================================================================
+-- Empresa 1 hace una segunda compra de arroz a precio diferente.
+-- El trigger T1 debe recalcular costo_promedio = ((stock_actual * costo_anterior) + (nueva_cant * nuevo_costo)) / nuevo_stock_total
+
+SELECT 'PRE-2da compra arroz' AS momento, stock_actual, costo_promedio FROM producto WHERE id = 3;
+
+INSERT INTO compra (empresa_id, proveedor_id, sucursal_id, usuario_id, fecha, subtotal, impuesto, total, estado, saldo_pendiente)
+VALUES (1, 1, 1, 1, NOW(), 210000, 39900, 249900, 'PENDIENTE', 249900);
+
+INSERT INTO item_compra (compra_id, producto_id, cantidad, costo_unitario, subtotal)
+VALUES (4, 3, 50, 15000, 750000);   -- 50 bolsas a $15.000 (era $14.000)
+-- Costo promedio esperado: ((100*14000) + (50*15000)) / 150 = 2150000/150 = $14.333,33
+
+SELECT 'POST-2da compra arroz — costo promedio esperado ~14333' AS check_, stock_actual, costo_promedio
+FROM producto WHERE id = 3;
+
+
+-- =============================================================================
+-- SECCIÓN 6: PRUEBA TRIGGER T2 - VENTAS E INVENTARIO (stock baja + utilidad)
+-- =============================================================================
+
+-- Venta de contado empresa 1
+INSERT INTO venta (empresa_id, cliente_id, sucursal_id, usuario_id, fecha,
+    subtotal, descuento_porcentaje, descuento_valor, subtotal_con_descuento,
+    porcentaje_impuesto, valor_impuesto, total, total_pagado, saldo_pendiente,
+    estado, utilidad_total)
+VALUES (1, 3, 1, 2, NOW(),
+    56000, 0, 0, 56000,
+    0, 0, 56000, 56000, 0,
+    'PAGADA', 0);
+
+-- Items de venta: T2 se dispara por cada INSERT, baja stock y suma utilidad
+INSERT INTO item_venta (venta_id, producto_id, descripcion, cantidad, precio_unitario, costo_unitario, subtotal, utilidad, tipo_pago) VALUES
+    (1, 3, 'Arroz Diana 5kg',    10, 18000, 14333.33, 180000, 36666.70, 'EFECTIVO'),
+    (1, 4, 'Frijol bola roja',    5,  5500,  4000.00,  27500,  7500.00, 'EFECTIVO'),
+    (1, 1, 'Leche entera x1L',   20,  2800,  2100.00,  56000, 14000.00, 'EFECTIVO');
+
+-- Verificar stock bajó y utilidad_total se calculó en venta
+SELECT 'POST-VENTA 1 - stock' AS check_, id, nombre, stock_actual FROM producto WHERE id IN (1,3,4);
+SELECT 'POST-VENTA 1 - utilidad' AS check_, id, utilidad_total FROM venta WHERE id = 1;
+
+-- Kardex de venta
+SELECT 'KARDEX venta' AS check_, k.tipo_movimiento, p.nombre, k.cantidad, k.stock_anterior, k.stock_resultante
+FROM kardex k JOIN producto p ON p.id = k.producto_id
+WHERE k.empresa_id = 1 AND k.tipo_movimiento = 'VENTA'
+ORDER BY k.id;
+
+-- Venta empresa 2
+INSERT INTO venta (empresa_id, cliente_id, sucursal_id, usuario_id, fecha,
+    subtotal, descuento_porcentaje, descuento_valor, subtotal_con_descuento,
+    porcentaje_impuesto, valor_impuesto, total, total_pagado, saldo_pendiente,
+    estado, utilidad_total)
+VALUES (2, 6, 3, 5, NOW(),
+    47000, 0, 0, 47000,
+    19, 8930, 55930, 55930, 0,
+    'PAGADA', 0);
+
+INSERT INTO item_venta (venta_id, producto_id, descripcion, cantidad, precio_unitario, costo_unitario, subtotal, utilidad, tipo_pago) VALUES
+    (2, 7, 'Martillo 16oz',          1, 35000, 25000, 35000, 10000, 'EFECTIVO'),
+    (2, 8, 'Destornillador plano',   1, 12000,  8000, 12000,  4000, 'EFECTIVO');
+
+
+-- =============================================================================
+-- SECCIÓN 7: PRUEBA TRIGGER T3 - VENTAS A CRÉDITO (saldo cliente sube)
+-- =============================================================================
+
+-- El cliente 1 (Tienda La Esquina) compra a crédito
+SELECT 'PRE-VENTA CRÉDITO - saldo cliente 1' AS check_, saldo_actual FROM cliente WHERE id = 1;
+
+INSERT INTO venta (empresa_id, cliente_id, sucursal_id, usuario_id, fecha,
+    subtotal, descuento_porcentaje, descuento_valor, subtotal_con_descuento,
+    porcentaje_impuesto, valor_impuesto, total, total_pagado, saldo_pendiente,
+    estado, fecha_vencimiento, utilidad_total)
+VALUES (1, 1, 1, 2, NOW(),
+    170000, 0, 0, 170000,
+    0, 0, 170000, 0, 170000,
+    'PENDIENTE', NOW() + INTERVAL '30 days', 0);
+
+INSERT INTO item_venta (venta_id, producto_id, descripcion, cantidad, precio_unitario, costo_unitario, subtotal, utilidad, tipo_pago) VALUES
+    (3, 3, 'Arroz Diana 5kg',  5, 18000, 14333.33,  90000, 18333.35, 'CRÉDITO'),
+    (3, 2, 'Queso campesino', 10,  8500,  6000.00,  85000, 25000.00, 'CRÉDITO');
+
+-- T3 debe haber sumado 170000 al saldo del cliente 1
+SELECT 'POST-VENTA CRÉDITO - saldo cliente 1 (esperado 170000)' AS check_, saldo_actual FROM cliente WHERE id = 1;
+
+-- Venta a crédito empresa 2
+SELECT 'PRE-VENTA CRÉDITO - saldo cliente 4' AS check_, saldo_actual FROM cliente WHERE id = 4;
+
+INSERT INTO venta (empresa_id, cliente_id, sucursal_id, usuario_id, fecha,
+    subtotal, descuento_porcentaje, descuento_valor, subtotal_con_descuento,
+    porcentaje_impuesto, valor_impuesto, total, total_pagado, saldo_pendiente,
+    estado, fecha_vencimiento, utilidad_total)
+VALUES (2, 4, 3, 5, NOW(),
+    540000, 5, 27000, 513000,
+    19, 97470, 610470, 0, 610470,
+    'PENDIENTE', NOW() + INTERVAL '60 days', 0);
+
+INSERT INTO item_venta (venta_id, producto_id, descripcion, cantidad, precio_unitario, costo_unitario, subtotal, utilidad, tipo_pago) VALUES
+    (4, 7, 'Martillo 16oz',          10, 35000, 25000, 350000, 100000, 'CRÉDITO'),
+    (4, 9, 'Cable encauchetado 3x12', 40,  4500,  3000, 180000,  60000, 'CRÉDITO'),
+    (4,10, 'Tubo PVC 1/2"',          5,   8000,  5500,  40000,  12500, 'CRÉDITO');
+
+SELECT 'POST-VENTA CRÉDITO - saldo cliente 4 (esperado 610470)' AS check_, saldo_actual FROM cliente WHERE id = 4;
+
+
+-- =============================================================================
+-- SECCIÓN 8: PRUEBA TRIGGER T4 - ABONOS DE CLIENTES (saldo baja, venta PAGADA)
+-- =============================================================================
+
+-- Abono parcial sobre venta 3
+SELECT 'PRE-ABONO - venta 3' AS check_, total, total_pagado, saldo_pendiente, estado FROM venta WHERE id = 3;
+
+INSERT INTO abono (empresa_id, venta_id, fecha, valor, metodo_pago, usuario_id)
+VALUES (1, 3, NOW(), 100000, 'EFECTIVO', 2);
+
+SELECT 'POST-ABONO PARCIAL - venta 3 (saldo_pendiente esperado 70000)' AS check_,
+    total_pagado, saldo_pendiente, estado FROM venta WHERE id = 3;
+SELECT 'POST-ABONO PARCIAL - saldo cliente 1 (esperado 70000)' AS check_,
+    saldo_actual FROM cliente WHERE id = 1;
+
+-- Abono final que cierra la deuda (debe cambiar estado a PAGADA)
+INSERT INTO abono (empresa_id, venta_id, fecha, valor, metodo_pago, usuario_id)
+VALUES (1, 3, NOW(), 70000, 'TRANSFERENCIA', 2);
+
+SELECT 'POST-ABONO FINAL - venta 3 (estado esperado PAGADA)' AS check_,
+    total_pagado, saldo_pendiente, estado FROM venta WHERE id = 3;
+SELECT 'POST-ABONO FINAL - saldo cliente 1 (esperado 0)' AS check_,
+    saldo_actual FROM cliente WHERE id = 1;
+
+-- Abono parcial empresa 2
+INSERT INTO abono (empresa_id, venta_id, fecha, valor, metodo_pago, usuario_id)
+VALUES (2, 4, NOW(), 300000, 'TRANSFERENCIA', 4);
+
+SELECT 'POST-ABONO empresa 2 - venta 4 (saldo_pendiente esperado 310470)' AS check_,
+    total_pagado, saldo_pendiente, estado FROM venta WHERE id = 4;
+
+
+-- =============================================================================
+-- SECCIÓN 9: PRUEBA TRIGGER T5 - PAGOS A PROVEEDORES
+-- =============================================================================
+
+-- Pago parcial a compra 1
+SELECT 'PRE-PAGO - compra 1' AS check_, total, total_pagado, saldo_pendiente, estado FROM compra WHERE id = 1;
+
+INSERT INTO pago_proveedor (empresa_id, compra_id, fecha, valor, metodo_pago, usuario_id)
+VALUES (1, 1, NOW(), 250000, 'TRANSFERENCIA', 1);
+
+SELECT 'POST-PAGO PARCIAL - compra 1' AS check_, total_pagado, saldo_pendiente, estado FROM compra WHERE id = 1;
+
+-- Pago total que cierra la compra
+INSERT INTO pago_proveedor (empresa_id, compra_id, fecha, valor, metodo_pago, usuario_id)
+VALUES (1, 1, NOW(), 249900, 'CHEQUE', 1);
+
+SELECT 'POST-PAGO TOTAL - compra 1 (estado esperado PAGADA)' AS check_,
+    total_pagado, saldo_pendiente, estado FROM compra WHERE id = 1;
+
+-- Pago empresa 2
+INSERT INTO pago_proveedor (empresa_id, compra_id, fecha, valor, metodo_pago, usuario_id)
+VALUES (2, 3, NOW(), 1249500, 'TRANSFERENCIA', 4);
+
+SELECT 'POST-PAGO empresa 2 - compra 3 (estado esperado PAGADA)' AS check_,
+    total_pagado, saldo_pendiente, estado FROM compra WHERE id = 3;
+
+
+-- =============================================================================
+-- SECCIÓN 10: RENOVACIÓN DE LICENCIA
+-- =============================================================================
+
+INSERT INTO renovacion_licencia (licencia_id, meses_agregados, nueva_fecha_vencimiento, monto_pagado, observacion)
+VALUES (2, 6, NOW() + INTERVAL '12 months', 150000, 'Renovación semestral empresa 2');
+
+
+-- =============================================================================
+-- SECCIÓN 11: CONSULTAS DE VALIDACIÓN GENERAL
+-- =============================================================================
+
+-- 11.1 Resumen de inventario por empresa (verificar aislamiento multitenant)
+SELECT '=== INVENTARIO POR EMPRESA ===' AS reporte;
+SELECT e.nombre AS empresa, s.nombre AS sucursal, p.nombre AS producto,
+       p.stock_actual, p.costo_promedio, p.precio_venta,
+       ROUND((p.precio_venta - p.costo_promedio)::numeric, 2) AS margen_unitario
+FROM producto p
+JOIN empresa e ON e.id = p.empresa_id
+JOIN sucursal s ON s.id = p.sucursal_id
+ORDER BY e.id, p.id;
+
+-- 11.2 Estado de cuentas por cobrar
+SELECT '=== CUENTAS POR COBRAR ===' AS reporte;
+SELECT e.nombre AS empresa, c.nombre AS cliente,
+       cl.saldo_actual AS saldo_en_cliente,
+       SUM(v.saldo_pendiente) AS saldo_en_ventas
+FROM cliente cl
+JOIN empresa e ON e.id = cl.empresa_id
+JOIN cliente c ON c.id = cl.id
+LEFT JOIN venta v ON v.cliente_id = cl.id AND v.saldo_pendiente > 0
+GROUP BY e.nombre, c.nombre, cl.saldo_actual
+ORDER BY e.nombre;
+
+-- 11.3 Estado de cuentas por pagar
+SELECT '=== CUENTAS POR PAGAR (PROVEEDORES) ===' AS reporte;
+SELECT e.nombre AS empresa, pr.nombre AS proveedor,
+       co.id AS compra_id, co.total, co.total_pagado, co.saldo_pendiente, co.estado
+FROM compra co
+JOIN empresa e ON e.id = co.empresa_id
+JOIN proveedor pr ON pr.id = co.proveedor_id
+ORDER BY e.id, co.id;
+
+-- 11.4 Rentabilidad de ventas
+SELECT '=== RENTABILIDAD DE VENTAS ===' AS reporte;
+SELECT e.nombre AS empresa, v.id AS venta_id,
+       v.total, v.utilidad_total,
+       ROUND((v.utilidad_total / NULLIF(v.total, 0) * 100)::numeric, 2) AS margen_pct,
+       v.estado
+FROM venta v
+JOIN empresa e ON e.id = v.empresa_id
+ORDER BY e.id, v.id;
+
+-- 11.5 Kardex completo con saldos
+SELECT '=== KARDEX COMPLETO ===' AS reporte;
+SELECT e.nombre AS empresa, p.nombre AS producto,
+       k.tipo_movimiento, k.cantidad, k.costo_unitario,
+       k.stock_anterior, k.stock_resultante, k.referencia, k.fecha
+FROM kardex k
+JOIN empresa e ON e.id = k.empresa_id
+JOIN producto p ON p.id = k.producto_id
+ORDER BY e.id, k.id;
+
+-- 11.6 Verificación de aislamiento multitenant
+-- Ningún cliente, producto o usuario de empresa 1 debe aparecer en empresa 2 y viceversa
+SELECT '=== VERIFICACIÓN AISLAMIENTO MULTITENANT ===' AS reporte;
+SELECT 'Empresa 1 - clientes' AS entidad, COUNT(*) AS total FROM cliente WHERE empresa_id = 1
+UNION ALL
+SELECT 'Empresa 2 - clientes', COUNT(*) FROM cliente WHERE empresa_id = 2
+UNION ALL
+SELECT 'Empresa 1 - productos', COUNT(*) FROM producto WHERE empresa_id = 1
+UNION ALL
+SELECT 'Empresa 2 - productos', COUNT(*) FROM producto WHERE empresa_id = 2
+UNION ALL
+SELECT 'Empresa 1 - ventas',    COUNT(*) FROM venta   WHERE empresa_id = 1
+UNION ALL
+SELECT 'Empresa 2 - ventas',    COUNT(*) FROM venta   WHERE empresa_id = 2;
+
+-- 11.7 Consistencia del kardex (stock_resultante del último movimiento = stock_actual en producto)
+SELECT '=== CONSISTENCIA KARDEX vs PRODUCTO ===' AS reporte;
+SELECT p.nombre,
+       p.stock_actual AS stock_en_producto,
+       k_last.stock_resultante AS ultimo_kardex,
+       CASE WHEN p.stock_actual = k_last.stock_resultante THEN 'OK ✓' ELSE 'DISCREPANCIA ✗' END AS estado
+FROM producto p
+JOIN LATERAL (
+    SELECT stock_resultante
+    FROM kardex
+    WHERE producto_id = p.id
+    ORDER BY id DESC
+    LIMIT 1
+) k_last ON TRUE
+ORDER BY p.empresa_id, p.id;
+
+-- 11.8 Log de licencias activas
+SELECT '=== LICENCIAS ACTIVAS ===' AS reporte;
+SELECT e.nombre AS empresa, l.token, l.estado,
+       l.fecha_activacion::date AS activacion,
+       l.fecha_vencimiento::date AS vencimiento,
+       (l.fecha_vencimiento - NOW())::text AS tiempo_restante
+FROM licencia_token l
+JOIN empresa e ON e.id = l.empresa_id
+ORDER BY e.id;

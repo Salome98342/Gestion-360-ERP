@@ -1,0 +1,542 @@
+﻿/* ================================================================
+   GESTION 360 . ERP Login  -  Dark Corporate Theme
+   ================================================================ */
+
+/* -- Tokens ------------------------------------------------------ */
+:root {
+  --erp-bg:            #070e1c;
+  --erp-panel:         #09152b;
+  --erp-card-bg:       rgba(8, 17, 40, 0.97);
+  --erp-card-border:   rgba(255, 255, 255, 0.07);
+  --erp-card-shadow:   0 32px 80px rgba(0, 0, 0, 0.7),
+                       0 0 0 1px rgba(255, 255, 255, 0.04);
+  --erp-accent:        #2563eb;
+  --erp-accent-light:  #3b82f6;
+  --erp-accent-glow:   rgba(37, 99, 235, 0.38);
+  --erp-accent-subtle: rgba(37, 99, 235, 0.1);
+  --erp-cyan:          #0ea5e9;
+  --erp-green:         #4ade80;
+  --erp-red:           #f87171;
+  --erp-text:          #e2e8f0;
+  --erp-text-mid:      #94a3b8;
+  --erp-text-muted:    #4a5568;
+  --erp-input-bg:      rgba(255, 255, 255, 0.04);
+  --erp-input-border:  rgba(255, 255, 255, 0.1);
+  --erp-divider:       rgba(255, 255, 255, 0.07);
+  --r-sm:  6px;
+  --r-md:  10px;
+  --r-lg:  16px;
+  --font:  'Segoe UI', system-ui, -apple-system, sans-serif;
+}
+
+/* -- Reset local ------------------------------------------------- */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+/* -- Layout raiz ------------------------------------------------- */
+.erp-login {
+  display: flex;
+  width: 100%;
+  height: 100vh;
+  font-family: var(--font);
+  background: var(--erp-bg);
+  overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ================================================================
+   PANEL IZQUIERDO -- Branding
+   ================================================================ */
+.erp-brand {
+  position: relative;
+  flex: 0 0 58%;
+  display: flex;
+  flex-direction: column;
+  background: var(--erp-panel);
+  overflow: hidden;
+}
+
+/* Grid de puntos de fondo */
+.erp-brand__grid {
+  position: absolute;
+  inset: 0;
+  background-image: radial-gradient(rgba(255,255,255,0.045) 1px, transparent 1px);
+  background-size: 36px 36px;
+  pointer-events: none;
+}
+
+/* Glows de color */
+.erp-brand__glow {
+  position: absolute;
+  border-radius: 50%;
+  pointer-events: none;
+  filter: blur(90px);
+}
+.erp-brand__glow--a {
+  top: -20%; left: -15%;
+  width: 65%; height: 65%;
+  background: radial-gradient(circle, rgba(37,99,235,0.2) 0%, transparent 65%);
+}
+.erp-brand__glow--b {
+  bottom: -15%; right: -8%;
+  width: 55%; height: 55%;
+  background: radial-gradient(circle, rgba(14,165,233,0.14) 0%, transparent 65%);
+}
+.erp-brand__glow--c {
+  top: 40%; right: 10%;
+  width: 35%; height: 35%;
+  background: radial-gradient(circle, rgba(37,99,235,0.08) 0%, transparent 65%);
+}
+
+/* Linea separadora derecha */
+.erp-brand::after {
+  content: '';
+  position: absolute;
+  top: 0; right: 0;
+  width: 1px; height: 100%;
+  background: linear-gradient(
+    to bottom,
+    transparent 0%,
+    rgba(37,99,235,0.5) 30%,
+    rgba(14,165,233,0.4) 70%,
+    transparent 100%
+  );
+}
+
+/* Contenido centrado */
+.erp-brand__content {
+  position: relative;
+  z-index: 1;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 48px 64px;
+  gap: 22px;
+}
+
+/* Logo */
+
+.erp-brand__logo {
+  display: block;
+  max-height: 100px;
+  width: auto;
+  filter: brightness(1.1);
+}
+
+/* Titular */
+.erp-brand__title {
+  font-size: 2.8rem;
+  font-weight: 800;
+  letter-spacing: -1.5px;
+  color: var(--erp-text);
+  line-height: 1;
+  margin: 0;
+}
+.erp-brand__title em {
+  font-style: normal;
+  color: var(--erp-accent-light);
+}
+
+/* Subtitulo */
+.erp-brand__sub {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 3.5px;
+  text-transform: uppercase;
+  color: var(--erp-cyan);
+}
+
+/* Tagline */
+.erp-brand__tagline {
+  font-size: 0.95rem;
+  color: var(--erp-text-mid);
+  text-align: center;
+  max-width: 380px;
+  line-height: 1.6;
+}
+
+/* -- Tarjetas de metricas decorativas ---------------------------- */
+.erp-metrics {
+  display: flex;
+  gap: 10px;
+  width: 100%;
+  max-width: 448px;
+}
+.erp-metric {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 14px 16px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: var(--r-md);
+  backdrop-filter: blur(6px);
+}
+.erp-metric__label {
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  color: var(--erp-text-muted);
+}
+.erp-metric__value {
+  font-size: 1.2rem;
+  font-weight: 800;
+  color: var(--erp-text);
+  letter-spacing: -0.5px;
+}
+.erp-metric__delta        { font-size: 0.68rem; font-weight: 700; }
+.erp-metric__delta--up    { color: var(--erp-green); }
+.erp-metric__delta--down  { color: var(--erp-red);   }
+
+/* -- Grafico de barras decorativo -------------------------------- */
+.erp-chart {
+  display: flex;
+  align-items: flex-end;
+  gap: 5px;
+  height: 50px;
+  width: 100%;
+  max-width: 448px;
+  padding: 0 2px;
+}
+.erp-chart__bar {
+  flex: 1;
+  background: linear-gradient(to top, var(--erp-accent) 0%, var(--erp-cyan) 100%);
+  border-radius: 3px 3px 0 0;
+  opacity: 0.5;
+  transition: opacity 0.2s;
+  min-height: 4px;
+}
+.erp-chart__bar:hover { opacity: 0.85; }
+
+/* -- Pills de modulos -------------------------------------------- */
+.erp-modules {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+  max-width: 420px;
+}
+.erp-module-pill {
+  padding: 5px 14px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  border-radius: 100px;
+  background: var(--erp-accent-subtle);
+  color: var(--erp-accent-light);
+  border: 1px solid rgba(37,99,235,0.25);
+}
+
+/* -- Footer izquierdo -------------------------------------------- */
+.erp-brand__footer {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 14px 40px;
+  border-top: 1px solid var(--erp-divider);
+  font-size: 0.68rem;
+  color: var(--erp-text-muted);
+}
+.erp-brand__version {
+  font-weight: 700;
+  color: var(--erp-accent-light);
+}
+
+/* ================================================================
+   PANEL DERECHO -- Formulario de acceso
+   ================================================================ */
+.erp-form-panel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 48px;
+  gap: 20px;
+  background: var(--erp-bg);
+}
+
+/* Tarjeta del formulario */
+.erp-card {
+  width: 100%;
+  max-width: 420px;
+  background: var(--erp-card-bg);
+  border: 1px solid var(--erp-card-border);
+  border-radius: var(--r-lg);
+  box-shadow: var(--erp-card-shadow);
+  padding: 40px 36px 36px;
+  backdrop-filter: blur(24px);
+  position: relative;
+  overflow: hidden;
+}
+
+/* Linea accent superior de la tarjeta */
+.erp-card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, var(--erp-accent), var(--erp-cyan));
+}
+
+/* Header */
+.erp-card__header {
+  text-align: center;
+  margin-bottom: 30px;
+}
+.erp-card__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 46px; height: 46px;
+  background: var(--erp-accent-subtle);
+  border: 1px solid rgba(37,99,235,0.3);
+  border-radius: var(--r-md);
+  color: var(--erp-accent-light);
+  margin-bottom: 16px;
+}
+.erp-card__title {
+  font-size: 1.3rem;
+  font-weight: 700;
+  color: var(--erp-text);
+  letter-spacing: -0.4px;
+  margin-bottom: 6px;
+}
+.erp-card__subtitle {
+  font-size: 0.8rem;
+  color: var(--erp-text-muted);
+}
+
+/* -- Formulario -------------------------------------------------- */
+.erp-form {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.erp-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.erp-field__label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: var(--erp-text-mid);
+}
+.erp-field__wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+.erp-field__icon {
+  position: absolute;
+  left: 13px;
+  color: var(--erp-text-muted);
+  pointer-events: none;
+  flex-shrink: 0;
+  transition: color 0.2s;
+}
+.erp-field__input {
+  width: 100%;
+  padding: 11px 14px 11px 40px;
+  background: var(--erp-input-bg);
+  border: 1px solid var(--erp-input-border);
+  border-radius: var(--r-sm);
+  color: var(--erp-text);
+  font-size: 0.88rem;
+  font-family: var(--font);
+  transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
+}
+.erp-field__input::placeholder { color: var(--erp-text-muted); }
+.erp-field__input:focus {
+  outline: none;
+  border-color: var(--erp-accent);
+  background: rgba(37,99,235,0.05);
+  box-shadow: 0 0 0 3px var(--erp-accent-glow);
+}
+.erp-field__wrap:focus-within .erp-field__icon { color: var(--erp-accent-light); }
+
+/* -- Opciones ---------------------------------------------------- */
+.erp-options {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 2px;
+}
+.erp-chk {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  user-select: none;
+}
+.erp-chk input { display: none; }
+.erp-chk__box {
+  width: 16px; height: 16px;
+  flex-shrink: 0;
+  border: 1px solid var(--erp-input-border);
+  border-radius: 4px;
+  background: var(--erp-input-bg);
+  position: relative;
+  transition: background 0.2s, border-color 0.2s;
+}
+.erp-chk input:checked ~ .erp-chk__box {
+  background: var(--erp-accent);
+  border-color: var(--erp-accent);
+}
+.erp-chk input:checked ~ .erp-chk__box::after {
+  content: '';
+  position: absolute;
+  left: 4.5px; top: 1.5px;
+  width: 4px; height: 8px;
+  border: 2px solid #fff;
+  border-top: none; border-left: none;
+  transform: rotate(45deg);
+}
+.erp-chk__label { font-size: 0.78rem; color: var(--erp-text-mid); }
+
+.erp-link {
+  font-size: 0.78rem;
+  color: var(--erp-accent-light);
+  text-decoration: none;
+  transition: color 0.2s;
+}
+.erp-link:hover { color: var(--erp-cyan); text-decoration: underline; }
+
+/* -- Boton principal --------------------------------------------- */
+.erp-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  padding: 13px 24px;
+  margin-top: 6px;
+  background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+  color: #fff;
+  font-size: 0.88rem;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  border: none;
+  border-radius: var(--r-sm);
+  cursor: pointer;
+  transition: filter 0.15s, transform 0.15s, box-shadow 0.2s;
+  box-shadow: 0 4px 20px var(--erp-accent-glow);
+}
+.erp-btn:hover {
+  filter: brightness(1.12);
+  transform: translateY(-1px);
+  box-shadow: 0 8px 30px var(--erp-accent-glow);
+}
+.erp-btn:active { transform: translateY(0); filter: brightness(0.95); }
+
+/* -- Divisor ----------------------------------------------------- */
+.erp-divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 22px 0 16px;
+  font-size: 0.72rem;
+  color: var(--erp-text-muted);
+}
+.erp-divider::before, .erp-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--erp-divider);
+}
+
+/* -- Boton SSO --------------------------------------------------- */
+.erp-btn-sso {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  padding: 11px 24px;
+  background: transparent;
+  color: var(--erp-text-mid);
+  font-size: 0.82rem;
+  font-weight: 600;
+  font-family: var(--font);
+  border: 1px solid var(--erp-card-border);
+  border-radius: var(--r-sm);
+  cursor: pointer;
+  transition: border-color 0.2s, color 0.2s, background 0.2s;
+}
+.erp-btn-sso:hover {
+  border-color: rgba(255,255,255,0.18);
+  color: var(--erp-text);
+  background: rgba(255,255,255,0.03);
+}
+
+/* Footer del panel derecho */
+.erp-form-panel__footer {
+  font-size: 0.7rem;
+  color: var(--erp-text-muted);
+  text-align: center;
+}
+
+/* -- Alert de error ---------------------------------------------- */
+.erp-alert {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  background: rgba(248, 113, 113, 0.1);
+  border: 1px solid rgba(248, 113, 113, 0.3);
+  border-radius: var(--r-sm);
+  color: var(--erp-red);
+  font-size: 0.82rem;
+  line-height: 1.4;
+}
+.erp-alert svg { flex-shrink: 0; }
+
+/* -- Input con acción a la derecha (ej: ver contraseña) ----------- */
+.erp-field__input--has-action {
+  padding-right: 40px;
+}
+.erp-field__toggle {
+  position: absolute;
+  right: 11px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--erp-text-muted);
+  padding: 2px;
+  transition: color 0.2s;
+}
+.erp-field__toggle:hover { color: var(--erp-text-mid); }
+
+/* -- Spinner del botón ------------------------------------------- */
+@keyframes erp-spin {
+  to { transform: rotate(360deg); }
+}
+.erp-btn__spinner {
+  animation: erp-spin 0.7s linear infinite;
+  flex-shrink: 0;
+}
+.erp-btn:disabled {
+  opacity: 0.75;
+  cursor: not-allowed;
+  transform: none !important;
+  box-shadow: none !important;
+}
+
+
+@media (max-width: 480px) {
+  .erp-card { padding: 32px 22px 28px; }
+  .erp-form-panel { padding: 24px 16px; }
+}

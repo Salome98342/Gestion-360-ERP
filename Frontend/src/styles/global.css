@@ -1,0 +1,20 @@
+/* Reseteo básico y tipografía global */
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  background-color: #f8f9fa; /* Un gris muy claro, casi blanco, para el fondo general */
+  color: #333;
+  line-height: 1.6;
+}
+
+/* Opcional: Estilos para enlaces globales si los necesitas */
+a {
+  text-decoration: none;
+  color: inherit;
+  transition: color 0.3s ease;
+}
