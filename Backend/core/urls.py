@@ -18,7 +18,7 @@ from django.contrib import admin
 from django.urls import include, path
 from rest_framework.routers import DefaultRouter
 
-from apps.empresas.views import EmpresaViewSet, LicenciaTokenViewSet, RenovacionLicenciaViewSet
+from apps.empresas.views import EmpresaViewSet, LicenciaTokenViewSet, RenovacionLicenciaViewSet, EventoEmpresaViewSet
 from apps.usuarios.views import SucursalViewSet, RolViewSet, UsuarioViewSet, LoginView, RefreshView, LogoutView
 from apps.inventario.views import (
 
@@ -49,6 +49,7 @@ router = DefaultRouter()
 router.register(r'empresas', EmpresaViewSet)
 router.register(r'licencias', LicenciaTokenViewSet)
 router.register(r'renovaciones-licencia', RenovacionLicenciaViewSet)
+router.register(r'eventos-empresa', EventoEmpresaViewSet, basename='evento-empresa')
 
 # Usuarios / Estructura
 router.register(r'sucursales', SucursalViewSet)

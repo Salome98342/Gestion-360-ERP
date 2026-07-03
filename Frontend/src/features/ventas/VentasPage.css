@@ -4,6 +4,22 @@
 	gap: 18px;
 }
 
+.venta-modal {
+	width: min(1040px, calc(100vw - 40px));
+	box-sizing: border-box;
+	overflow-x: hidden;
+}
+
+.venta-modal .m-field,
+.venta-modal .m-field__input,
+.venta-modal .m-field__select {
+	min-width: 0;
+	max-width: 100%;
+}
+
+.venta-modal .m-field__select {
+	text-overflow: ellipsis;
+}
 .venta-section {
 	display: flex;
 	flex-direction: column;
@@ -39,7 +55,7 @@
 
 .venta-item {
 	display: grid;
-	grid-template-columns: 1.05fr 1.1fr 0.55fr 0.75fr 0.75fr 0.95fr;
+	grid-template-columns: minmax(0, 1.05fr) minmax(0, 1.1fr) minmax(82px, 0.55fr) minmax(120px, 0.75fr) minmax(120px, 0.75fr) minmax(140px, 0.95fr);
 	gap: 10px;
 	padding: 12px;
 	border: 1px solid rgba(255, 255, 255, 0.08);
@@ -47,19 +63,34 @@
 	background: rgba(255, 255, 255, 0.02);
 }
 
+.venta-item--simple {
+	grid-template-columns: minmax(180px, 1.2fr) minmax(170px, 1.2fr) minmax(82px, 0.45fr) minmax(120px, 0.7fr);
+}
+
+.td-subtext {
+	display: block;
+	margin-top: 3px;
+	color: #64748b;
+	font-size: 0.72rem;
+	font-weight: 500;
+}
+
 .venta-item__meta {
 	display: grid;
-	grid-template-columns: 1fr auto auto;
+	grid-template-columns: minmax(0, 1fr) auto;
 	gap: 10px;
 	align-items: end;
+grid-column: 1 / -1;
 }
 
 .venta-item__summary {
-	min-width: 94px;
+	min-width: 0;
 	display: flex;
 	flex-direction: column;
 	gap: 5px;
 	padding: 9px 12px;
+	width: 100%;
+	box-sizing: border-box;
 	border: 1px solid rgba(255, 255, 255, 0.08);
 	border-radius: 8px;
 	background: rgba(9, 21, 43, 0.55);
@@ -143,3 +174,8 @@
 		grid-template-columns: 1fr;
 	}
 }
+
+
+
+
+

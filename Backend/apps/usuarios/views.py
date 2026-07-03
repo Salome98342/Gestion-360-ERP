@@ -8,6 +8,7 @@ from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.exceptions import TokenError
 
+from apps.mixins import EmpresaScopedViewSetMixin
 from .models import Sucursal, Rol, Usuario
 from .permissions import RolPermission
 from .serializers import (
@@ -18,21 +19,21 @@ from .serializers import (
 
 # ── ViewSets CRUD ────────────────────────────────────────────────────────────
 
-class SucursalViewSet(viewsets.ModelViewSet):
+class SucursalViewSet(EmpresaScopedViewSetMixin, viewsets.ModelViewSet):
     modulo             = 'usuarios'
     permission_classes = [RolPermission]
     queryset           = Sucursal.objects.all()
     serializer_class   = SucursalSerializer
 
 
-class RolViewSet(viewsets.ModelViewSet):
+class RolViewSet(EmpresaScopedViewSetMixin, viewsets.ModelViewSet):
     modulo             = 'usuarios'
     permission_classes = [RolPermission]
     queryset           = Rol.objects.all()
     serializer_class   = RolSerializer
 
 
-class UsuarioViewSet(viewsets.ModelViewSet):
+class UsuarioViewSet(EmpresaScopedViewSetMixin, viewsets.ModelViewSet):
     modulo             = 'usuarios'
     permission_classes = [RolPermission]
     queryset           = Usuario.objects.select_related('rol', 'sucursal').all()
@@ -88,7 +89,10 @@ def _set_refresh_cookie(response: Response, token: str) -> None:
         value=token,
         httponly=True,
         secure=not settings.DEBUG,  # Solo HTTPS en producción
-        samesite='Strict',
+        # Para SPA (Frontend en otro origen/puerto) usamos Lax para permitir cookies en navegación.
+        # Strict puede impedir el envío del refresh_token y romper el flujo de sesión.
+        samesite='Lax',
+
         max_age=60 * 60 * 24 * 7,  # 7 días
         path='/auth/',
     )

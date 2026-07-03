@@ -8,6 +8,7 @@ class SucursalSerializer(serializers.ModelSerializer):
     class Meta:
         model = Sucursal
         fields = '__all__'
+        read_only_fields = ['empresa']
 
 
 class RolSerializer(serializers.ModelSerializer):
@@ -17,6 +18,7 @@ class RolSerializer(serializers.ModelSerializer):
     class Meta:
         model = Rol
         fields = ['id', 'empresa', 'nombre', 'permisos', 'usuarios_count']
+        read_only_fields = ['empresa']
 
     def get_usuarios_count(self, obj):
         return obj.usuario.filter(activo=1).count()
@@ -48,6 +50,7 @@ class UsuarioWriteSerializer(serializers.ModelSerializer):
             'nombre', 'cedula', 'telefono', 'correo',
             'username', 'password', 'activo',
         ]
+        read_only_fields = ['empresa']
 
     def validate_password(self, value: str) -> str:
         if value and len(value.strip()) < 6:
@@ -70,4 +73,12 @@ class UsuarioWriteSerializer(serializers.ModelSerializer):
         if raw and raw.strip():
             validated_data['password'] = make_password(raw.strip())
         return super().update(instance, validated_data)
+
+    def validate(self, attrs):
+        empresa_id = self.context.get('empresa_id')
+        for field in ('sucursal', 'rol'):
+            value = attrs.get(field)
+            if value and empresa_id and value.empresa_id != empresa_id:
+                raise serializers.ValidationError({field: 'No pertenece a tu empresa.'})
+        return attrs
 

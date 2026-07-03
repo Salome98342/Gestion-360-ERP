@@ -64,12 +64,48 @@ async function request<T>(method: Method, path: string, body?: unknown): Promise
   }
 
   if (!response.ok) {
-    const err = await response.json().catch(() => ({})) as { error?: string };
-    throw new Error(err.error ?? `Error ${response.status}`);
+    const err = await response.json().catch(() => ({})) as Record<string, unknown>;
+    const details = Object.entries(err)
+      .map(([key, value]) => `${key}: ${Array.isArray(value) ? value.join(', ') : String(value)}`)
+      .join(' | ');
+    throw new Error((err.error as string | undefined) ?? (details || `Error ${response.status}`));
   }
 
   if (response.status === 204) return undefined as T;
   return response.json() as Promise<T>;
+}
+
+async function download(path: string): Promise<Blob> {
+  const token = await getValidToken();
+  const headers: HeadersInit = {};
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+
+  let response = await fetch(`${BASE_URL}${path}`, {
+    method: 'GET',
+    credentials: 'include',
+    headers,
+  });
+
+  if (response.status === 401) {
+    try {
+      const newToken = await refreshAccessToken();
+      response = await fetch(`${BASE_URL}${path}`, {
+        method: 'GET',
+        credentials: 'include',
+        headers: { Authorization: `Bearer ${newToken}` },
+      });
+    } catch {
+      setAccessToken(null);
+      window.location.href = '/login';
+      throw new Error('Sesion expirada. Redirigiendo al login...');
+    }
+  }
+
+  if (!response.ok) {
+    throw new Error(`Error ${response.status}`);
+  }
+
+  return response.blob();
 }
 
 // ── API pública ──────────────────────────────────────────────────────────────
@@ -79,4 +115,6 @@ export const api = {
   put:    <T>(path: string, body: unknown)  => request<T>('PUT',    path, body),
   patch:  <T>(path: string, body: unknown)  => request<T>('PATCH',  path, body),
   delete: <T>(path: string)                 => request<T>('DELETE', path),
+  download,
 };
+

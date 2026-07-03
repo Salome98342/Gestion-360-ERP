@@ -10,6 +10,8 @@ import InventarioPage from './features/inventario/InventarioPage';
 import VentasPage     from './features/ventas/VentasPage';
 import ComprasPage    from './features/compras/ComprasPage';
 import EmpresasPage   from './features/empresas/EmpresasPage';
+import ReportesPage   from './features/reportes/ReportesPage';
+import MovimientosCajaPage from './features/caja/MovimientosCajaPage';
 import { canView } from './utils/permissions';
 import type { ModuleKey } from './types/usuarios';
 
@@ -40,6 +42,8 @@ function App() {
             <Route path="/ventas"     element={<ModuleGuard module="ventas"><VentasPage /></ModuleGuard>} />
             <Route path="/compras"    element={<ModuleGuard module="compras"><ComprasPage /></ModuleGuard>} />
             <Route path="/empresas"   element={<ModuleGuard module="empresas"><EmpresasPage /></ModuleGuard>} />
+            <Route path="/reportes"   element={<ModuleGuard module="reportes"><ReportesPage /></ModuleGuard>} />
+            <Route path="/caja"       element={<ModuleGuard module="ventas"><MovimientosCajaPage /></ModuleGuard>} />
           </Route>
           <Route path="*" element={<Navigate to="/dashboard" replace />} />
         </Routes>

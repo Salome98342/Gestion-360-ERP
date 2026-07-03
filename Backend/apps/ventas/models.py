@@ -59,6 +59,8 @@ class Venta(models.Model):
     sucursal = models.ForeignKey('usuarios.Sucursal', on_delete=models.CASCADE, related_name='ventas')
     usuario = models.ForeignKey(Usuario, on_delete=models.CASCADE, related_name='ventas')
 
+    cliente_nombre = models.TextField(null=True, blank=True)
+    cliente_documento = models.TextField(null=True, blank=True)
     fecha = models.DateTimeField()
     subtotal = models.FloatField()
     descuento_porcentaje = models.FloatField(default=0)
@@ -68,6 +70,9 @@ class Venta(models.Model):
     valor_impuesto = models.FloatField(default=0)
     total = models.FloatField()
     total_pagado = models.FloatField(default=0)
+    metodo_pago = models.TextField(default='EFECTIVO')
+    monto_recibido = models.FloatField(default=0)
+    cambio = models.FloatField(default=0)
     saldo_pendiente = models.FloatField(default=0)
     estado = models.TextField()
     fecha_vencimiento = models.DateTimeField(null=True, blank=True)

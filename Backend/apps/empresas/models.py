@@ -31,6 +31,22 @@ class LicenciaToken(models.Model):
         return f'{self.empresa_id} - {self.estado}'
 
 
+class EventoEmpresa(models.Model):
+    class Meta:
+        db_table = "evento_empresa"
+
+    empresa = models.ForeignKey(Empresa, on_delete=models.CASCADE, related_name='eventos')
+    titulo = models.TextField()
+    descripcion = models.TextField(null=True, blank=True)
+    fecha = models.DateTimeField()
+    tipo = models.TextField(default='GENERAL')
+    completado = models.IntegerField(default=0)
+    creado_en = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f'{self.titulo} ({self.empresa_id})'
+
+
 class RenovacionLicencia(models.Model):
     class Meta:
         db_table = "renovacion_licencia"

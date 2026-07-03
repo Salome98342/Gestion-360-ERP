@@ -3,27 +3,45 @@ from rest_framework.permissions import BasePermission
 
 # Mapea acciones DRF a claves en el JSON de permisos del rol
 _ACTION_MAP = {
-    'list':           'ver',
-    'retrieve':       'ver',
-    'create':         'crear',
-    'update':         'editar',
+    'list': 'ver',
+    'retrieve': 'ver',
+    'create': 'crear',
+    'update': 'editar',
     'partial_update': 'editar',
-    'destroy':        'eliminar',
-    'toggle_activo':  'editar',
-    'set_password':   'editar',
+    'destroy': 'eliminar',
+    'toggle_activo': 'editar',
+    'set_password': 'editar',
 }
 
 
 class RolPermission(BasePermission):
-    """
-    Verifica que el usuario autenticado tenga el permiso necesario en su rol
-    para la acción solicitada sobre el módulo del ViewSet.
+    """Permisos por rol (JSON) para cada módulo/acción solicitada.
 
     Uso: definir `modulo = 'ventas'` en el ViewSet.
 
-    Roles con permisos = NULL tienen acceso completo (estado inicial / admin).
+    Reglas:
+      - Si `rol.permisos` es NULL/vacío => acceso completo.
+      - Si `rol.permisos` es JSON inválido o no tiene la estructura esperada => denegar.
+      - Si existe el módulo pero no contiene la acción => denegar.
     """
+
     message = 'No tienes permiso para realizar esta acción.'
+
+    def _infer_required(self, request, view) -> str:
+        action = getattr(view, 'action', None)
+        if action:
+            return (_ACTION_MAP.get(action) or 'ver').lower()
+
+        method = (request.method or '').upper()
+        if method in ('GET', 'HEAD'):
+            return 'ver'
+        if method == 'POST':
+            return 'crear'
+        if method in ('PUT', 'PATCH'):
+            return 'editar'
+        if method == 'DELETE':
+            return 'eliminar'
+        return 'ver'
 
     def has_permission(self, request, view):
         user = request.user
@@ -36,17 +54,31 @@ class RolPermission(BasePermission):
         if modulo is None:
             return True  # ViewSet sin módulo definido → permitir
 
-        # Rol sin permisos configurados → acceso completo (rol admin inicial)
+        modulo = str(modulo).lower()
+
+        # Si permisos es NULL o vacío => acceso completo
         raw = user.rol.permisos
-        if not raw:
+        if raw is None:
+            return True
+        if isinstance(raw, str) and raw.strip() == '':
             return True
 
-        action   = getattr(view, 'action', 'list')
-        required = _ACTION_MAP.get(action, 'ver')
+        # En has_permission() algunos ViewSet aún no exponen `view.action`.
+        required = self._infer_required(request, view)
 
+        # Parseo estricto: cualquier estructura inválida => denegar
         try:
             perms = json.loads(raw)
         except (json.JSONDecodeError, TypeError):
             return False
 
-        return bool(perms.get(modulo, {}).get(required, False))
+        if not isinstance(perms, dict):
+            return False
+
+        module_entry = perms.get(modulo)
+        if not isinstance(module_entry, dict):
+            return False
+
+        allowed = module_entry.get(required, False)
+        return bool(allowed)
+

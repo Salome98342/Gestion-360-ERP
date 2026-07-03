@@ -1,3 +1,4 @@
+import { useEffect, useMemo, useState } from 'react';
 import { Outlet, NavLink, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard,
@@ -7,6 +8,7 @@ import {
   Users,
   Building2,
   BarChart3,
+  Wallet,
   Bell,
   Search,
   LogOut,
@@ -15,6 +17,8 @@ import {
 import { useAuth } from '../contexts/AuthContext';
 import { canView } from '../utils/permissions';
 import type { ModuleKey } from '../types/usuarios';
+import { reportesService } from '../services/reportesService';
+import { usuariosService } from '../services/usuariosService';
 import logo360 from '../assets/Logo.png';
 import './MainLayout.css';
 
@@ -32,6 +36,7 @@ const ALL_NAV_ITEMS: {
   { group: 'Operaciones',    to: '/ventas',     icon: ShoppingCart, label: 'Ventas',      modulo: 'ventas'     },
   { group: 'Operaciones',    to: '/compras',    icon: ShoppingBag,  label: 'Compras',     modulo: 'compras'    },
   { group: 'Operaciones',    to: '/inventario', icon: Package,      label: 'Inventario',  modulo: 'inventario' },
+  { group: 'Operaciones',    to: '/caja',       icon: Wallet,       label: 'Caja',        modulo: 'ventas'     },
   { group: 'Administración', to: '/usuarios',  icon: Users,           label: 'Usuarios',     modulo: 'usuarios'     },
   { group: 'Administración', to: '/empresas',  icon: Building2,       label: 'Empresas',     modulo: 'empresas'     },
   { group: 'Reportes',       to: '/reportes',  icon: BarChart3,       label: 'Análisis',     modulo: 'reportes'     },
@@ -40,6 +45,8 @@ const ALL_NAV_ITEMS: {
 export default function MainLayout() {
   const { user, logout } = useAuth();
   const navigate         = useNavigate();
+  const [notifOpen, setNotifOpen] = useState(false);
+  const [notifications, setNotifications] = useState<Array<{ title: string; detail: string; date: string }>>([]);
 
   const handleLogout = async () => {
     await logout();
@@ -47,6 +54,41 @@ export default function MainLayout() {
   };
 
   const initials = user?.nombre?.charAt(0).toUpperCase() ?? 'U';
+
+  useEffect(() => {
+    if (!user) return;
+    let mounted = true;
+    Promise.all([usuariosService.listLogs(), reportesService.listEventos()])
+      .then(([logs, eventos]) => {
+        if (!mounted) return;
+        const fromEvents = eventos
+          .filter((evento) => {
+            const delta = new Date(evento.fecha).getTime() - Date.now();
+            return delta >= 0 && delta <= 7 * 24 * 60 * 60 * 1000;
+          })
+          .slice(0, 4)
+          .map((evento) => ({
+            title: 'Evento próximo',
+            detail: evento.titulo,
+            date: evento.fecha,
+          }));
+
+        const fromLogs = logs.slice(0, 6).map((log) => ({
+          title: log.accion,
+          detail: `${log.usuario_nombre} · ${log.modulo || 'general'}`,
+          date: log.fecha,
+        }));
+
+        setNotifications([...fromEvents, ...fromLogs].sort((a, b) => +new Date(b.date) - +new Date(a.date)).slice(0, 7));
+      })
+      .catch(() => {
+        if (!mounted) return;
+        setNotifications([]);
+      });
+    return () => { mounted = false; };
+  }, [user]);
+
+  const notifBadge = useMemo(() => notifications.length, [notifications]);
 
   // Filtrar items por permiso y agrupar
   const visibleItems = ALL_NAV_ITEMS.filter(item =>
@@ -118,10 +160,27 @@ export default function MainLayout() {
             />
           </div>
           <div className="erp-header__actions">
-            <button className="erp-header__icon-btn" aria-label="Notificaciones">
+            <button
+              className="erp-header__icon-btn"
+              aria-label="Notificaciones"
+              onClick={() => setNotifOpen((prev) => !prev)}
+            >
               <Bell size={17} />
-              <span className="erp-header__badge" aria-hidden="true" />
+              {notifBadge > 0 && <span className="erp-header__badge" aria-hidden="true" />}
             </button>
+            {notifOpen && (
+              <div className="erp-notifs" role="dialog" aria-label="Panel de notificaciones">
+                <h4 className="erp-notifs__title">Notificaciones</h4>
+                {notifications.length === 0 && <p className="erp-notifs__empty">Sin notificaciones por ahora.</p>}
+                {notifications.map((notif, index) => (
+                  <article className="erp-notifs__item" key={`${notif.title}-${index}`}>
+                    <strong>{notif.title}</strong>
+                    <span>{notif.detail}</span>
+                    <time>{new Date(notif.date).toLocaleString('es-CO', { dateStyle: 'short', timeStyle: 'short' })}</time>
+                  </article>
+                ))}
+              </div>
+            )}
             <div className="erp-header__divider" aria-hidden="true" />
             <div className="erp-header__user">
               <span className="erp-header__user-name">{user?.nombre}</span>
