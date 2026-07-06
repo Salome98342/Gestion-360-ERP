@@ -1,4 +1,5 @@
 import type { LoginCredentials, LoginResponse } from '../types/auth';
+import { ApiHttpError, buildApiErrorMessage } from '../utils/httpError';
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL as string;
 
@@ -26,8 +27,8 @@ async function post<T>(
   });
 
   if (!response.ok) {
-    const data = await response.json().catch(() => ({})) as { error?: string };
-    throw new Error(data.error ?? `Error ${response.status}`);
+    const data = await response.json().catch(() => null) as Record<string, unknown> | null;
+    throw new ApiHttpError(response.status, buildApiErrorMessage(response.status, data), data);
   }
 
   if (response.status === 204) return undefined as T;

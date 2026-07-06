@@ -15,6 +15,7 @@ import type { Venta, Compra } from '../../types/ventas';
 import type { Producto } from '../../types/inventario';
 import type { LogActividad } from '../../types/usuarios';
 import type { EventoEmpresa } from '../../types/reportes';
+import { ApiHttpError, isLicenseErrorData, licenseErrorMessage } from '../../utils/httpError';
 import './DashboardPage.css';
 
 const QUICK_MODULES = [
@@ -56,8 +57,12 @@ export default function DashboardPage() {
         setLogs(data.logs);
         setEventos(data.eventos);
       })
-      .catch(() => {
+      .catch((err) => {
         if (!mounted) return;
+        if (err instanceof ApiHttpError && err.status === 403 && isLicenseErrorData(err.data)) {
+          setError(licenseErrorMessage(String(err.data?.status ?? '')));
+          return;
+        }
         setError('No se pudieron cargar los indicadores del dashboard.');
       })
       .finally(() => {

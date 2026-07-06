@@ -1,5 +1,6 @@
 import { getAccessToken, setAccessToken } from '../contexts/AuthContext';
 import { authService } from '../services/authService';
+import { ApiHttpError, buildApiErrorMessage } from './httpError';
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL as string;
 
@@ -64,11 +65,8 @@ async function request<T>(method: Method, path: string, body?: unknown): Promise
   }
 
   if (!response.ok) {
-    const err = await response.json().catch(() => ({})) as Record<string, unknown>;
-    const details = Object.entries(err)
-      .map(([key, value]) => `${key}: ${Array.isArray(value) ? value.join(', ') : String(value)}`)
-      .join(' | ');
-    throw new Error((err.error as string | undefined) ?? (details || `Error ${response.status}`));
+    const err = await response.json().catch(() => null) as Record<string, unknown> | null;
+    throw new ApiHttpError(response.status, buildApiErrorMessage(response.status, err), err);
   }
 
   if (response.status === 204) return undefined as T;
@@ -102,7 +100,8 @@ async function download(path: string): Promise<Blob> {
   }
 
   if (!response.ok) {
-    throw new Error(`Error ${response.status}`);
+    const err = await response.json().catch(() => null) as Record<string, unknown> | null;
+    throw new ApiHttpError(response.status, buildApiErrorMessage(response.status, err), err);
   }
 
   return response.blob();

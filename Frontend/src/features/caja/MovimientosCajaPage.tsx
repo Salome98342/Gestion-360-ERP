@@ -3,6 +3,7 @@ import { Plus, RotateCcw } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { reportesService } from '../../services/reportesService';
 import type { Caja, MovimientoCaja } from '../../types/reportes';
+import { ApiHttpError, isLicenseErrorData, licenseErrorMessage } from '../../utils/httpError';
 import './MovimientosCajaPage.css';
 
 function fmtMoney(n: number) {
@@ -40,17 +41,35 @@ export default function MovimientosCajaPage() {
     setLoading(true);
     setError(null);
     try {
-      const [cajasData, movimientosData] = await Promise.all([
+      const [cajasResult, movimientosResult] = await Promise.allSettled([
         reportesService.listCajas(),
         reportesService.listMovimientosCaja(),
       ]);
+
+      const cajasData = cajasResult.status === 'fulfilled' ? cajasResult.value : [];
+      const movimientosData = movimientosResult.status === 'fulfilled' ? movimientosResult.value : [];
+
+      if (cajasResult.status === 'rejected') {
+        const reason = cajasResult.reason;
+        if (reason instanceof ApiHttpError && reason.status === 403 && isLicenseErrorData(reason.data)) {
+          throw reason;
+        }
+      }
+
       setCajas(cajasData);
       setMovimientos(movimientosData);
       if (cajasData.length > 0 && !movCajaId) {
         setMovCajaId(String(cajasData[0].id));
       }
-    } catch {
+      if (movimientosResult.status === 'rejected') {
+        setError('No tienes permisos para consultar movimientos de caja, pero sí para ver las cajas.');
+      }
+    } catch (err) {
+      if (err instanceof ApiHttpError && err.status === 403 && isLicenseErrorData(err.data)) {
+        setError(licenseErrorMessage(String(err.data?.status ?? '')));
+      } else {
       setError('No se pudo cargar el módulo de caja.');
+      }
     } finally {
       setLoading(false);
     }

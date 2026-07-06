@@ -1,5 +1,7 @@
 from rest_framework.exceptions import PermissionDenied
 
+from apps.empresas.models import Empresa
+
 
 class EmpresaScopedViewSetMixin:
     """
@@ -27,13 +29,19 @@ class EmpresaScopedViewSetMixin:
 
     def perform_create(self, serializer):
         user = getattr(self.request, 'user', None)
-        empresa = getattr(user, 'empresa', None)
-        if not empresa:
+        empresa_id = getattr(user, 'empresa_id', None)
+        if not empresa_id:
             raise PermissionDenied('No hay una empresa asociada a la sesion.')
+
+        # Evita errores 500 por violación de FK cuando la empresa asociada
+        # al usuario no existe en la tabla (p.ej. seed desincronizado o schema distinto).
+        if not Empresa.objects.filter(pk=empresa_id).exists():
+            raise PermissionDenied(
+                'La empresa asociada a la sesión no existe en la base de datos.'
+            )
 
         model = serializer.Meta.model
         if any(field.name == 'empresa' for field in model._meta.fields):
-            serializer.save(empresa=empresa)
+            serializer.save(empresa_id=empresa_id)
         else:
             serializer.save()
-

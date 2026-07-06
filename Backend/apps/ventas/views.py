@@ -5,6 +5,10 @@ from rest_framework.response import Response
 
 from apps.mixins import EmpresaScopedViewSetMixin
 from apps.usuarios.permissions import RolPermission
+from apps.empresas.permissions import LicenciaPermission
+
+
+
 from .models import (
     Compra,
     ItemCompra,
@@ -77,7 +81,8 @@ def _simple_pdf(lines):
 
 class CompraViewSet(EmpresaScopedViewSetMixin, viewsets.ModelViewSet):
     modulo             = 'compras'
-    permission_classes = [RolPermission]
+    permission_classes = [RolPermission, LicenciaPermission]
+
     queryset           = Compra.objects.all()
     serializer_class   = CompraReadSerializer
 
@@ -104,7 +109,8 @@ class CompraViewSet(EmpresaScopedViewSetMixin, viewsets.ModelViewSet):
 
 class ItemCompraViewSet(EmpresaScopedViewSetMixin, viewsets.ModelViewSet):
     modulo             = 'compras'
-    permission_classes = [RolPermission]
+    permission_classes = [RolPermission, LicenciaPermission]
+
     queryset = ItemCompra.objects.all()
     serializer_class = ItemCompraSerializer
     empresa_filter_path = 'compra__empresa_id'
@@ -112,14 +118,16 @@ class ItemCompraViewSet(EmpresaScopedViewSetMixin, viewsets.ModelViewSet):
 
 class PagoProveedorViewSet(EmpresaScopedViewSetMixin, viewsets.ModelViewSet):
     modulo             = 'compras'
-    permission_classes = [RolPermission]
+    permission_classes = [RolPermission, LicenciaPermission]
+
     queryset = PagoProveedor.objects.all()
     serializer_class = PagoProveedorSerializer
 
 
 class VentaViewSet(EmpresaScopedViewSetMixin, viewsets.ModelViewSet):
     modulo             = 'ventas'
-    permission_classes = [RolPermission]
+    permission_classes = [RolPermission, LicenciaPermission]
+
     queryset           = Venta.objects.all()
     serializer_class   = VentaReadSerializer
 
@@ -194,21 +202,24 @@ class ItemVentaViewSet(EmpresaScopedViewSetMixin, viewsets.ModelViewSet):
 
 class AbonoViewSet(EmpresaScopedViewSetMixin, viewsets.ModelViewSet):
     modulo             = 'ventas'
-    permission_classes = [RolPermission]
+    permission_classes = [RolPermission, LicenciaPermission]
+
     queryset = Abono.objects.all()
     serializer_class = AbonoSerializer
 
 
 class KardexViewSet(EmpresaScopedViewSetMixin, viewsets.ModelViewSet):
     modulo             = 'inventario'
-    permission_classes = [RolPermission]
+    permission_classes = [RolPermission, LicenciaPermission]
+
     queryset = Kardex.objects.all()
     serializer_class = KardexSerializer
 
 
 class MovimientoCajaViewSet(EmpresaScopedViewSetMixin, viewsets.ModelViewSet):
     modulo             = 'ventas'
-    permission_classes = [RolPermission]
+    permission_classes = [RolPermission, LicenciaPermission]
+
     queryset = MovimientoCaja.objects.all()
     serializer_class = MovimientoCajaSerializer
     empresa_filter_path = 'caja__empresa_id'
@@ -223,7 +234,8 @@ class MovimientoCajaViewSet(EmpresaScopedViewSetMixin, viewsets.ModelViewSet):
 
 class AuditoriaDescuentoViewSet(EmpresaScopedViewSetMixin, viewsets.ModelViewSet):
     modulo             = 'ventas'
-    permission_classes = [RolPermission]
+    permission_classes = [RolPermission, LicenciaPermission]
+
     queryset = AuditoriaDescuento.objects.all()
     serializer_class = AuditoriaDescuentoSerializer
 
@@ -231,7 +243,8 @@ class AuditoriaDescuentoViewSet(EmpresaScopedViewSetMixin, viewsets.ModelViewSet
 class LogActividadViewSet(EmpresaScopedViewSetMixin, viewsets.ReadOnlyModelViewSet):
     """Solo lectura. Filtra por ?usuario=id y/o ?modulo=nombre."""
     modulo             = 'usuarios'
-    permission_classes = [RolPermission]
+    permission_classes = [RolPermission, LicenciaPermission]
+
     queryset = LogActividad.objects.all()
     serializer_class = LogActividadSerializer
 
@@ -248,6 +261,7 @@ class LogActividadViewSet(EmpresaScopedViewSetMixin, viewsets.ReadOnlyModelViewS
 
 class SecuenciasViewSet(EmpresaScopedViewSetMixin, viewsets.ModelViewSet):
     modulo             = 'ventas'
-    permission_classes = [RolPermission]
+    permission_classes = [RolPermission, LicenciaPermission]
+
     queryset = Secuencias.objects.all()
     serializer_class = SecuenciasSerializer

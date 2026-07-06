@@ -9,6 +9,7 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.exceptions import TokenError
 
 from apps.mixins import EmpresaScopedViewSetMixin
+from apps.empresas.permissions import get_license_block_payload
 from .models import Sucursal, Rol, Usuario
 from .permissions import RolPermission
 from .serializers import (
@@ -145,6 +146,10 @@ class LoginView(APIView):
                 status=status.HTTP_401_UNAUTHORIZED,
             )
 
+        license_block = get_license_block_payload(user.empresa_id)
+        if license_block is not None:
+            return Response(license_block, status=status.HTTP_403_FORBIDDEN)
+
         refresh = _build_tokens(user)
         access  = refresh.access_token
 
@@ -194,6 +199,13 @@ class RefreshView(APIView):
                 {'error': 'Sesión expirada. Inicia sesión nuevamente.'},
                 status=status.HTTP_401_UNAUTHORIZED,
             )
+
+        empresa_id = refresh.payload.get('empresa_id')
+        license_block = get_license_block_payload(empresa_id)
+        if license_block is not None:
+            response = Response(license_block, status=status.HTTP_403_FORBIDDEN)
+            response.delete_cookie('refresh_token', path='/auth/')
+            return response
 
         response = Response({'access': str(new_access)}, status=status.HTTP_200_OK)
         _set_refresh_cookie(response, str(refresh))  # Rotación del refresh token

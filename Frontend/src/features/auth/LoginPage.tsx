@@ -1,8 +1,10 @@
 ﻿import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import Swal from 'sweetalert2';
 import './Login.css';
 import logo360 from '../../assets/Logo.png';
 import { useAuth } from '../../hooks/useAuth';
+import { ApiHttpError, isLicenseErrorData, licenseErrorMessage } from '../../utils/httpError';
 
 const CHART_HEIGHTS = [38, 62, 44, 78, 52, 88, 68, 82, 58, 94, 72, 86];
 
@@ -33,7 +35,21 @@ const LoginPage: React.FC = () => {
     try {
       await login({ username, password });
       navigate('/dashboard', { replace: true });
-    } catch {
+    } catch (err) {
+      if (err instanceof ApiHttpError && err.status === 403 && isLicenseErrorData(err.data)) {
+        const statusValue = String(err.data?.status ?? '');
+        const exp = typeof err.data?.fecha_vencimiento === 'string' ? err.data.fecha_vencimiento : null;
+        const expText = exp
+          ? `\nFecha de vencimiento: ${new Date(exp).toLocaleString('es-CO', { dateStyle: 'short', timeStyle: 'short' })}`
+          : '';
+
+        await Swal.fire({
+          icon: 'warning',
+          title: 'Licencia no activa',
+          text: `${licenseErrorMessage(statusValue)}${expText}`,
+          confirmButtonText: 'Entendido',
+        });
+      }
       // El error ya es gestionado por el hook
     }
   };

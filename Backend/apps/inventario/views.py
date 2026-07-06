@@ -2,6 +2,8 @@ from rest_framework import viewsets
 
 from apps.mixins import EmpresaScopedViewSetMixin
 from apps.usuarios.permissions import RolPermission
+from apps.empresas.permissions import LicenciaPermission
+
 from .models import Categoria, TipoCliente, Cliente, Proveedor, Producto, Caja
 from .serializers import (
     CategoriaSerializer,
@@ -15,36 +17,37 @@ from .serializers import (
 
 
 class CategoriaViewSet(EmpresaScopedViewSetMixin, viewsets.ModelViewSet):
-    modulo             = 'inventario'
+    modulo = 'inventario'
     permission_classes = [RolPermission]
-    queryset           = Categoria.objects.all()
-    serializer_class   = CategoriaSerializer
+    queryset = Categoria.objects.all()
+    serializer_class = CategoriaSerializer
 
 
 class TipoClienteViewSet(EmpresaScopedViewSetMixin, viewsets.ModelViewSet):
-    modulo             = 'inventario'
+    modulo = 'inventario'
     permission_classes = [RolPermission]
-    queryset           = TipoCliente.objects.all()
-    serializer_class   = TipoClienteSerializer
+    queryset = TipoCliente.objects.all()
+    serializer_class = TipoClienteSerializer
 
 
 class ClienteViewSet(EmpresaScopedViewSetMixin, viewsets.ModelViewSet):
-    modulo             = 'ventas'
+    modulo = 'ventas'
     permission_classes = [RolPermission]
-    queryset           = Cliente.objects.select_related('tipo_cliente').all()
-    serializer_class   = ClienteSerializer
+    queryset = Cliente.objects.select_related('tipo_cliente').all()
+    serializer_class = ClienteSerializer
 
 
 class ProveedorViewSet(EmpresaScopedViewSetMixin, viewsets.ModelViewSet):
-    modulo             = 'compras'
+    modulo = 'compras'
     permission_classes = [RolPermission]
-    queryset           = Proveedor.objects.all()
-    serializer_class   = ProveedorSerializer
+    queryset = Proveedor.objects.all()
+    serializer_class = ProveedorSerializer
 
 
 class ProductoViewSet(EmpresaScopedViewSetMixin, viewsets.ModelViewSet):
-    modulo             = 'inventario'
-    permission_classes = [RolPermission]
+    modulo = 'inventario'
+    permission_classes = [RolPermission, LicenciaPermission]
+    queryset = Producto.objects.all()
 
     def get_serializer_class(self):
         if self.action in ('create', 'update', 'partial_update'):
@@ -52,24 +55,31 @@ class ProductoViewSet(EmpresaScopedViewSetMixin, viewsets.ModelViewSet):
         return ProductoReadSerializer
 
     def get_queryset(self):
-        qs = Producto.objects.select_related('categoria', 'proveedor', 'sucursal').all()
+        qs = (
+            super()
+            .get_queryset()
+            .select_related('categoria', 'proveedor', 'sucursal')
+        )
+
         categoria = self.request.query_params.get('categoria')
-        activo    = self.request.query_params.get('activo')
-        search    = self.request.query_params.get('search')
+        activo = self.request.query_params.get('activo')
+        search = self.request.query_params.get('search')
+
         if categoria:
             qs = qs.filter(categoria_id=categoria)
         if activo is not None and activo != '':
             qs = qs.filter(activo=activo)
         if search:
             qs = qs.filter(nombre__icontains=search)
+
         return qs.order_by('nombre')
 
 
 class CajaViewSet(EmpresaScopedViewSetMixin, viewsets.ModelViewSet):
-    modulo             = 'ventas'
+    modulo = 'ventas'
     permission_classes = [RolPermission]
-    queryset           = Caja.objects.all()
-    serializer_class   = CajaSerializer
+    queryset = Caja.objects.all()
+    serializer_class = CajaSerializer
 
     def get_queryset(self):
         return super().get_queryset().order_by('-id')
