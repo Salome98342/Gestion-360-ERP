@@ -71,6 +71,7 @@ class Producto(models.Model):
     empresa = models.ForeignKey(Empresa, on_delete=models.CASCADE, related_name='productos')
     categoria = models.ForeignKey(Categoria, null=True, blank=True, on_delete=models.SET_NULL)
     nombre = models.TextField()
+    precio_compra = models.FloatField(default=0)
     precio_venta = models.FloatField()
     costo_promedio = models.FloatField(default=0)
     margen_porcentaje = models.FloatField(default=0)

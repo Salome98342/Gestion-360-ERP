@@ -21,14 +21,14 @@ export interface Proveedor {
 export interface Producto {
   id: number; empresa: number;
   categoria: number | null; categoria_nombre: string | null;
-  nombre: string; precio_venta: number; costo_promedio: number; margen_porcentaje: number;
+  nombre: string; precio_compra: number; precio_venta: number; costo_promedio: number; margen_porcentaje: number;
   stock_actual: number; sucursal: number; sucursal_nombre: string;
   proveedor: number | null; proveedor_nombre: string | null; activo: number;
 }
 
 export interface ProductoWrite {
   empresa: number; categoria?: number | null;
-  nombre: string; precio_venta: number; costo_promedio?: number;
+  nombre: string; precio_compra: number; precio_venta: number; costo_promedio?: number;
   margen_porcentaje?: number; stock_actual?: number;
   sucursal: number; proveedor?: number | null; activo?: number;
 }

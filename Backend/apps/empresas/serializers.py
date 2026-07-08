@@ -26,6 +26,16 @@ class RenovacionLicenciaSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError('La licencia no pertenece a tu empresa.')
         return value
 
+    def create(self, validated_data):
+        renovacion = super().create(validated_data)
+
+        licencia = renovacion.licencia
+        licencia.fecha_vencimiento = renovacion.nueva_fecha_vencimiento
+        licencia.estado = 'DISPONIBLE'
+        licencia.save(update_fields=['fecha_vencimiento', 'estado'])
+
+        return renovacion
+
 
 class EventoEmpresaSerializer(serializers.ModelSerializer):
     class Meta:

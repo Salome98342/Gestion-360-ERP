@@ -57,6 +57,24 @@ class ProductoSerializer(serializers.ModelSerializer):
             value = attrs.get(field)
             if value and empresa_id and value.empresa_id != empresa_id:
                 raise serializers.ValidationError({field: 'No pertenece a tu empresa.'})
+
+        precio_compra = attrs.get('precio_compra')
+        margen_porcentaje = attrs.get('margen_porcentaje')
+
+        if precio_compra is None:
+            raise serializers.ValidationError({'precio_compra': 'Este campo es obligatorio.'})
+        if precio_compra <= 0:
+            raise serializers.ValidationError({'precio_compra': 'Debe ser mayor a 0.'})
+
+        if margen_porcentaje is None:
+            margen_porcentaje = 0
+            attrs['margen_porcentaje'] = margen_porcentaje
+        if margen_porcentaje < 0:
+            raise serializers.ValidationError({'margen_porcentaje': 'No puede ser negativo.'})
+
+        # Recalcular SIEMPRE precio_venta desde precio_compra y margen
+        attrs['precio_venta'] = float(precio_compra) * (1 + float(margen_porcentaje) / 100.0)
+
         return attrs
 
 
@@ -64,13 +82,13 @@ class ProductoReadSerializer(serializers.ModelSerializer):
     """GET: incluye nombres legibles de categoria, proveedor y sucursal."""
     categoria_nombre = serializers.CharField(source='categoria.nombre', read_only=True, default=None)
     proveedor_nombre = serializers.CharField(source='proveedor.nombre', read_only=True, default=None)
-    sucursal_nombre  = serializers.CharField(source='sucursal.nombre',  read_only=True)
+    sucursal_nombre  = serializers.CharField(source='sucursal.nombre', read_only=True)
 
     class Meta:
         model = Producto
         fields = [
             'id', 'empresa', 'categoria', 'categoria_nombre',
-            'nombre', 'precio_venta', 'costo_promedio', 'margen_porcentaje',
+            'nombre', 'precio_compra', 'precio_venta', 'costo_promedio', 'margen_porcentaje',
             'stock_actual', 'sucursal', 'sucursal_nombre',
             'proveedor', 'proveedor_nombre', 'activo',
         ]

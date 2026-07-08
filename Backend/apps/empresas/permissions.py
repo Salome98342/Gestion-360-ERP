@@ -32,6 +32,20 @@ def get_license_block_payload(empresa_id):
     estado = (licencia.estado or '').upper()
     fecha_venc = licencia.fecha_vencimiento
 
+    # Si existe una renovación más reciente, tomamos su vencimiento como fuente
+    # de verdad para evitar bloqueos por licencia_token desactualizada.
+    ultima_renovacion = (
+        licencia.renovaciones
+        .order_by('-fecha_renovacion', '-id')
+        .first()
+    )
+    if ultima_renovacion and ultima_renovacion.nueva_fecha_vencimiento:
+        fecha_renovada = ultima_renovacion.nueva_fecha_vencimiento
+        if fecha_venc is None or fecha_renovada > fecha_venc:
+            fecha_venc = fecha_renovada
+            if estado != 'DISPONIBLE':
+                estado = 'DISPONIBLE'
+
     # Algunas filas antiguas pueden guardar datetime naive en DB.
     # Normalizamos para comparar sin errores cuando USE_TZ=True.
     if fecha_venc is not None:

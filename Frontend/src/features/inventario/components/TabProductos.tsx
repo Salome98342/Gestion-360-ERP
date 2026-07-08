@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Search, Plus, Edit2, Trash2, X } from 'lucide-react';
 import { inventarioService } from '../../../services/inventarioService';
 import { useAuth } from '../../../contexts/AuthContext';
@@ -7,8 +7,8 @@ import type { Producto, ProductoWrite, Categoria, Proveedor } from '../../../typ
 import type { Sucursal } from '../../../types/usuarios';
 import { usuariosService } from '../../../services/usuariosService';
 
-interface PForm { nombre:string; precio_venta:string; costo_promedio:string; margen_porcentaje:string; stock_actual:string; categoria:string; sucursal:string; proveedor:string; activo:string; }
-const EMPTY: PForm = { nombre:'', precio_venta:'', costo_promedio:'0', margen_porcentaje:'0', stock_actual:'0', categoria:'', sucursal:'', proveedor:'', activo:'1' };
+interface PForm { nombre:string; precio_compra:string; precio_venta:string; costo_promedio:string; margen_porcentaje:string; stock_actual:string; categoria:string; sucursal:string; proveedor:string; activo:string; }
+const EMPTY: PForm = { nombre:'', precio_compra:'', precio_venta:'', costo_promedio:'0', margen_porcentaje:'0', stock_actual:'0', categoria:'', sucursal:'', proveedor:'', activo:'1' };
 
 function stockClass(s: number) { return s <= 0 ? 'stock-zero' : s < 5 ? 'stock-low' : 'stock-ok'; }
 function fmt(n: number, currency = 'COP') { return n.toLocaleString('es-CO', { style:'currency', currency, maximumFractionDigits:0 }); }
@@ -49,26 +49,72 @@ export default function TabProductos() {
     finally { setLoading(false); }
   }, [search, filtCat, filtActivo]);
 
-  useEffect(() => { load(); }, [load]);
+  const didLoadRef = useRef(false);
+  useEffect(() => {
+    if (didLoadRef.current) return;
+    didLoadRef.current = true;
+    load().catch(() => {});
+  }, [load]);
 
-  const f = (k: keyof PForm) => (e: React.ChangeEvent<HTMLInputElement|HTMLSelectElement>) => setForm(p => ({...p, [k]: e.target.value}));
+  const f = (k: keyof PForm) => (e: React.ChangeEvent<HTMLInputElement|HTMLSelectElement>) => {
+    const v = e.target.value;
+
+    setForm(p => {
+      const next = { ...p, [k]: v };
+
+      // Recalcular SIEMPRE precio_venta con compra + margen
+      const compraNum = Number(next.precio_compra);
+      const margenNum = Number(next.margen_porcentaje);
+
+      if (!Number.isNaN(compraNum) && compraNum > 0 && !Number.isNaN(margenNum) && margenNum >= 0) {
+        const venta = compraNum * (1 + margenNum / 100);
+        next.precio_venta = String(Math.round(venta * 100) / 100);
+      } else if (!next.precio_compra) {
+        next.precio_venta = '';
+      }
+
+      return next;
+    });
+  };
 
   const openCreate = () => { setEditing(null); setForm(EMPTY); setMError(null); setOpen(true); };
   const openEdit   = (p: Producto) => {
     setEditing(p);
-    setForm({ nombre:p.nombre, precio_venta:String(p.precio_venta), costo_promedio:String(p.costo_promedio), margen_porcentaje:String(p.margen_porcentaje), stock_actual:String(p.stock_actual), categoria:p.categoria?String(p.categoria):'', sucursal:String(p.sucursal), proveedor:p.proveedor?String(p.proveedor):'', activo:String(p.activo) });
+    setForm({
+      nombre: p.nombre,
+      precio_compra: String(p.precio_compra),
+      precio_venta: String(p.precio_venta),
+      costo_promedio: String(p.costo_promedio),
+      margen_porcentaje: String(p.margen_porcentaje),
+      stock_actual: String(p.stock_actual),
+      categoria: p.categoria ? String(p.categoria) : '',
+      sucursal: String(p.sucursal),
+      proveedor: p.proveedor ? String(p.proveedor) : '',
+      activo: String(p.activo),
+    });
     setMError(null); setOpen(true);
   };
 
   const handleSave = async () => {
     setMError(null);
-    if (!form.nombre.trim() || !form.precio_venta || !form.sucursal) { setMError('Nombre, precio y sucursal son obligatorios.'); return; }
+    if (!form.nombre.trim() || !form.precio_compra || !form.sucursal) { setMError('Nombre, precio de compra y sucursal son obligatorios.'); return; }
+
+    const precioCompraNum = Number(form.precio_compra);
+    const margenNum = Number(form.margen_porcentaje);
+
+    if (Number.isNaN(precioCompraNum) || precioCompraNum <= 0) { setMError('El precio de compra debe ser mayor a 0.'); return; }
+    if (Number.isNaN(margenNum) || margenNum < 0) { setMError('El margen % no puede ser negativo.'); return; }
+
     setSaving(true);
     try {
       const payload: ProductoWrite = {
-        empresa: me!.empresa_id, nombre: form.nombre.trim(),
-        precio_venta: Number(form.precio_venta), costo_promedio: Number(form.costo_promedio),
-        margen_porcentaje: Number(form.margen_porcentaje), stock_actual: Number(form.stock_actual),
+        empresa: me!.empresa_id,
+        nombre: form.nombre.trim(),
+        precio_compra: precioCompraNum,
+        precio_venta: Number(form.precio_venta),
+        costo_promedio: Number(form.costo_promedio),
+        margen_porcentaje: margenNum,
+        stock_actual: Number(form.stock_actual),
         sucursal: Number(form.sucursal),
         categoria: form.categoria ? Number(form.categoria) : null,
         proveedor: form.proveedor ? Number(form.proveedor) : null,
@@ -156,15 +202,49 @@ export default function TabProductos() {
             </div>
             <div className="modal-body">
               {mError && <div className="modal-error">{mError}</div>}
+              {(() => {
+                const compra = Number(form.precio_compra);
+                const margen = Number(form.margen_porcentaje);
+                const costo = Number(form.costo_promedio);
+                if (!Number.isNaN(compra) && compra > 0 && !Number.isNaN(margen) && margen >= 0 && !Number.isNaN(costo)) {
+                  const venta = compra * (1 + margen / 100);
+                  if (venta < costo) {
+                    return (
+                      <div className="modal-warning" style={{ color: '#f59e0b', marginBottom: 10 }}>
+                        Advertencia: el precio de venta calculado es menor al costo promedio.
+                      </div>
+                    );
+                  }
+                }
+                return null;
+              })()}
               <div className="modal-row modal-row-1">
                 <div className="m-field"><label className="m-field__label">Nombre *</label>
                   <input className="m-field__input" value={form.nombre} onChange={f('nombre')} placeholder="Nombre del producto"/>
                 </div>
               </div>
               <div className="modal-row">
-                <div className="m-field"><label className="m-field__label">Precio venta *</label>
-                  <input type="number" className="m-field__input" value={form.precio_venta} onChange={f('precio_venta')} placeholder="0"/>
+                <div className="m-field"><label className="m-field__label">Precio de compra *</label>
+                  <input
+                    type="number"
+                    className="m-field__input"
+                    value={form.precio_compra}
+                    onChange={f('precio_compra')}
+                    placeholder="0"
+                  />
                 </div>
+                <div className="m-field"><label className="m-field__label">Precio venta *</label>
+                  <input
+                    type="number"
+                    className="m-field__input"
+                    value={form.precio_venta}
+                    onChange={f('precio_venta')}
+                    placeholder="0"
+                  />
+                </div>
+              </div>
+
+              <div className="modal-row">
                 <div className="m-field"><label className="m-field__label">Costo promedio</label>
                   <input type="number" className="m-field__input" value={form.costo_promedio} onChange={f('costo_promedio')} placeholder="0"/>
                 </div>
