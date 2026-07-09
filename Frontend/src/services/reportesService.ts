@@ -18,15 +18,23 @@ export const reportesService = {
   updateEvento: (id: number, data: Partial<EventoEmpresaWrite>) =>
     api.patch<EventoEmpresa>(`/eventos-empresa/${id}/`, data),
 
-  listCajas: () => api.get<Caja[]>('/cajas/'),
+  listCajas: (filters?: { estado?: string; sucursal?: number; usuario?: number }) => {
+    const params = new URLSearchParams();
+    if (filters?.estado) params.set('estado', filters.estado);
+    if (filters?.sucursal) params.set('sucursal', String(filters.sucursal));
+    if (filters?.usuario) params.set('usuario', String(filters.usuario));
+    const q = params.toString();
+    return api.get<Caja[]>(`/cajas/${q ? `?${q}` : ''}`);
+  },
   createCaja: (data: { empresa: number; sucursal: number; usuario: number; monto_inicial: number; estado: string }) =>
     api.post<Caja>('/cajas/', data),
   updateCaja: (id: number, data: Partial<{ monto_cierre: number; estado: string }>) =>
     api.patch<Caja>(`/cajas/${id}/`, data),
 
-  listMovimientosCaja: (filters?: { caja?: number }) => {
+  listMovimientosCaja: (filters?: { caja?: number; tipo?: string }) => {
     const params = new URLSearchParams();
     if (filters?.caja) params.set('caja', String(filters.caja));
+    if (filters?.tipo) params.set('tipo', filters.tipo);
     const q = params.toString();
     return api.get<MovimientoCaja[]>(`/movimiento-caja/${q ? `?${q}` : ''}`);
   },

@@ -30,5 +30,6 @@ export interface ProductoWrite {
   empresa: number; categoria?: number | null;
   nombre: string; precio_compra: number; precio_venta: number; costo_promedio?: number;
   margen_porcentaje?: number; stock_actual?: number;
+  calcular_por_margen?: boolean;
   sucursal: number; proveedor?: number | null; activo?: number;
 }

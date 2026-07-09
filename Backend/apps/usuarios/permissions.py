@@ -14,6 +14,44 @@ _ACTION_MAP = {
 }
 
 
+def is_admin_user(user) -> bool:
+    """Determina si el usuario debe tratarse como administrador del tenant."""
+    if not user or not hasattr(user, 'rol') or user.rol is None:
+        return False
+
+    rol = user.rol
+    rol_nombre = (getattr(rol, 'nombre', '') or '').strip().lower()
+    if 'admin' in rol_nombre:
+        return True
+
+    perms = getattr(rol, 'permisos', None)
+    if perms in (None, '', {}, []):
+        return True
+
+    if isinstance(perms, dict):
+        return bool(perms.get('__admin__', False))
+
+    if isinstance(perms, str):
+        txt = perms.strip().lower()
+        if txt in ('', 'all', '*', 'admin'):
+            return True
+        try:
+            data = json.loads(perms)
+            if isinstance(data, dict) and data.get('__admin__') is True:
+                return True
+        except (json.JSONDecodeError, TypeError):
+            return False
+
+    return False
+
+
+class IsAdminRole(BasePermission):
+    message = 'Esta acción solo está disponible para el administrador.'
+
+    def has_permission(self, request, view):
+        return is_admin_user(getattr(request, 'user', None))
+
+
 class RolPermission(BasePermission):
     """Permisos por rol (JSONField nativo) para cada módulo/acción solicitada.
 

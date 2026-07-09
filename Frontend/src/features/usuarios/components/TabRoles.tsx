@@ -7,6 +7,7 @@ import {
   SYSTEM_MODULES, SYSTEM_ACTIONS,
   defaultPermissions, parsePermissions, serializePermissions,
 } from '../../../types/usuarios';
+import { confirmAction, notifyError, notifyInfo, notifySuccess } from '../../../utils/notify';
 import type { Rol, Permissions } from '../../../types/usuarios';
 
 interface RolForm { nombre: string; permisos: Permissions; }
@@ -71,6 +72,7 @@ export default function TabRoles() {
         setRoles(p => [...p, created]);
       }
       setOpen(false);
+      await notifySuccess(editing ? 'Rol actualizado' : 'Rol creado');
     } catch (err) {
       setMError(err instanceof Error ? err.message : 'Error al guardar.');
     } finally { setSaving(false); }
@@ -78,13 +80,16 @@ export default function TabRoles() {
 
   const handleDelete = async (r: Rol) => {
     if ((r.usuarios_count ?? 0) > 0) {
-      alert('No se puede eliminar un rol con usuarios activos asignados.'); return;
+      await notifyInfo('No se puede eliminar el rol', 'Tiene usuarios activos asignados.');
+      return;
     }
-    if (!window.confirm(`¿Eliminar el rol "${r.nombre}"? Esta acción no se puede deshacer.`)) return;
+    const ok = await confirmAction('Eliminar rol', `¿Eliminar el rol "${r.nombre}"? Esta acción no se puede deshacer.`, 'Sí, eliminar');
+    if (!ok) return;
     try {
       await usuariosService.deleteRol(r.id);
       setRoles(p => p.filter(x => x.id !== r.id));
-    } catch { alert('No se pudo eliminar el rol.'); }
+      await notifySuccess('Rol eliminado');
+    } catch { await notifyError('No se pudo eliminar el rol.'); }
   };
 
   if (loading) return <div className="table-empty">Cargando roles…</div>;

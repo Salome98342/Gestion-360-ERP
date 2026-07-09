@@ -4,6 +4,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { reportesService } from '../../services/reportesService';
 import type { Caja, MovimientoCaja } from '../../types/reportes';
 import { ApiHttpError, isLicenseErrorData, licenseErrorMessage } from '../../utils/httpError';
+import { confirmAction, notifyError, notifySuccess } from '../../utils/notify';
 import './MovimientosCajaPage.css';
 
 function fmtMoney(n: number) {
@@ -22,10 +23,11 @@ export default function MovimientosCajaPage() {
   const [movimientos, setMovimientos] = useState<MovimientoCaja[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [filtroCaja, setFiltroCaja] = useState('');
 
   const [montoInicial, setMontoInicial] = useState('0');
   const [cerrarCajaId, setCerrarCajaId] = useState('');
-  const [montoCierre, setMontoCierre] = useState('0');
+  const [montoCierre, setMontoCierre] = useState('');
 
   const [movCajaId, setMovCajaId] = useState('');
   const [movTipo, setMovTipo] = useState('INGRESO');
@@ -36,6 +38,7 @@ export default function MovimientosCajaPage() {
   const [saving, setSaving] = useState(false);
 
   const cajasAbiertas = useMemo(() => cajas.filter((caja) => (caja.estado || '').toUpperCase() === 'ABIERTA'), [cajas]);
+  const cajasCerradas = useMemo(() => cajas.filter((caja) => (caja.estado || '').toUpperCase() === 'CERRADA'), [cajas]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -58,8 +61,11 @@ export default function MovimientosCajaPage() {
 
       setCajas(cajasData);
       setMovimientos(movimientosData);
-      if (cajasData.length > 0 && !movCajaId) {
-        setMovCajaId(String(cajasData[0].id));
+      const cajaPreferida = cajasData.find((caja) => (caja.estado || '').toUpperCase() === 'ABIERTA') || cajasData[0];
+      if (cajaPreferida) {
+        setMovCajaId((prev) => prev || String(cajaPreferida.id));
+        setFiltroCaja((prev) => prev || String(cajaPreferida.id));
+        setCerrarCajaId((prev) => prev || ((cajaPreferida.estado || '').toUpperCase() === 'ABIERTA' ? String(cajaPreferida.id) : ''));
       }
       if (movimientosResult.status === 'rejected') {
         setError('No tienes permisos para consultar movimientos de caja, pero sí para ver las cajas.');
@@ -73,15 +79,38 @@ export default function MovimientosCajaPage() {
     } finally {
       setLoading(false);
     }
-  }, [movCajaId]);
+  }, []);
 
   useEffect(() => {
     load();
   }, [load]);
 
+  const cajaAbiertaUsuario = useMemo(() => {
+    if (!user) return null;
+    return cajasAbiertas.find((caja) => caja.usuario === user.id && caja.sucursal === user.sucursal_id) || null;
+  }, [cajasAbiertas, user]);
+
+  const movimientosFiltrados = useMemo(() => {
+    if (!filtroCaja) return movimientos;
+    return movimientos.filter((movimiento) => String(movimiento.caja) === filtroCaja);
+  }, [filtroCaja, movimientos]);
+
+  const resumenCaja = useMemo(() => {
+    const caja = cajas.find((item) => String(item.id) === filtroCaja) || null;
+    if (!caja) return null;
+    const ingresos = caja.total_ingresos ?? movimientos.filter((m) => m.caja === caja.id && m.tipo === 'INGRESO').reduce((acc, m) => acc + m.monto, 0);
+    const egresos = caja.total_egresos ?? movimientos.filter((m) => m.caja === caja.id && m.tipo === 'EGRESO').reduce((acc, m) => acc + m.monto, 0);
+    const saldo = caja.saldo_calculado ?? (caja.monto_inicial + ingresos - egresos);
+    return { caja, ingresos, egresos, saldo };
+  }, [cajas, filtroCaja, movimientos]);
+
   const openCaja = async () => {
     if (!user?.sucursal_id) {
       setError('El usuario no tiene sucursal asignada para abrir caja.');
+      return;
+    }
+    if (cajaAbiertaUsuario) {
+      setError(`Ya tienes una caja abierta (#${cajaAbiertaUsuario.id}) en esta sucursal.`);
       return;
     }
     const monto = Number(montoInicial);
@@ -102,9 +131,13 @@ export default function MovimientosCajaPage() {
       });
       setCajas((prev) => [created, ...prev]);
       setMontoInicial('0');
-      if (!movCajaId) setMovCajaId(String(created.id));
+      setMovCajaId(String(created.id));
+      setFiltroCaja(String(created.id));
+      setCerrarCajaId(String(created.id));
+      await notifySuccess('Caja abierta', `Caja #${created.id} abierta correctamente.`);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'No se pudo abrir la caja.');
+      await notifyError('No se pudo abrir la caja.');
     } finally {
       setSaving(false);
     }
@@ -112,28 +145,39 @@ export default function MovimientosCajaPage() {
 
   const closeCaja = async () => {
     const cajaId = Number(cerrarCajaId);
-    const cierre = Number(montoCierre);
     if (!cajaId) {
       setError('Selecciona una caja abierta para cerrar.');
       return;
     }
-    if (!Number.isFinite(cierre) || cierre < 0) {
+    const cierre = montoCierre.trim() === '' ? null : Number(montoCierre);
+    if (cierre !== null && (!Number.isFinite(cierre) || cierre < 0)) {
       setError('Ingresa un monto de cierre válido.');
       return;
     }
+
+    const ok = await confirmAction(
+      'Cerrar caja',
+      cierre === null
+        ? '¿Cerrar caja usando el cálculo automático según movimientos?'
+        : `¿Cerrar caja con monto manual ${fmtMoney(cierre)}?`,
+      'Sí, cerrar',
+    );
+    if (!ok) return;
 
     setSaving(true);
     setError(null);
     try {
       const updated = await reportesService.updateCaja(cajaId, {
         estado: 'CERRADA',
-        monto_cierre: cierre,
+        ...(cierre !== null ? { monto_cierre: cierre } : {}),
       });
       setCajas((prev) => prev.map((caja) => (caja.id === updated.id ? updated : caja)));
       setCerrarCajaId('');
-      setMontoCierre('0');
+      setMontoCierre('');
+      await notifySuccess('Caja cerrada', `Caja #${updated.id} cerrada correctamente.`);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'No se pudo cerrar la caja.');
+      await notifyError('No se pudo cerrar la caja.');
     } finally {
       setSaving(false);
     }
@@ -165,8 +209,10 @@ export default function MovimientosCajaPage() {
       setMovMonto('0');
       setMovConcepto('');
       setMovReferencia('');
+      await notifySuccess('Movimiento guardado');
     } catch (e) {
       setError(e instanceof Error ? e.message : 'No se pudo guardar el movimiento.');
+      await notifyError('No se pudo guardar el movimiento.');
     } finally {
       setSaving(false);
     }
@@ -186,6 +232,33 @@ export default function MovimientosCajaPage() {
 
       {!loading && (
         <>
+          <section className="cash-summary-grid">
+            <article className="cash-summary">
+              <span className="cash-summary__label">Cajas abiertas</span>
+              <strong className="cash-summary__value">{cajasAbiertas.length}</strong>
+            </article>
+            <article className="cash-summary">
+              <span className="cash-summary__label">Cajas cerradas</span>
+              <strong className="cash-summary__value">{cajasCerradas.length}</strong>
+            </article>
+            <article className="cash-summary">
+              <span className="cash-summary__label">Saldo esperado caja seleccionada</span>
+              <strong className="cash-summary__value">{resumenCaja ? fmtMoney(resumenCaja.saldo) : '—'}</strong>
+            </article>
+          </section>
+
+          <section className="cash-filter-row">
+            <div className="m-field">
+              <label className="m-field__label">Caja para consulta</label>
+              <select className="m-field__select" value={filtroCaja} onChange={(event) => setFiltroCaja(event.target.value)}>
+                <option value="">Todas</option>
+                {cajas.map((caja) => (
+                  <option key={caja.id} value={caja.id}>Caja #{caja.id} · {caja.estado}</option>
+                ))}
+              </select>
+            </div>
+          </section>
+
           <section className="cash-grid">
             <article className="cash-card">
               <h3>Abrir caja</h3>
@@ -211,7 +284,7 @@ export default function MovimientosCajaPage() {
               </div>
               <div className="m-field">
                 <label className="m-field__label">Monto cierre</label>
-                <input className="m-field__input" type="number" value={montoCierre} onChange={(event) => setMontoCierre(event.target.value)} />
+                <input className="m-field__input" type="number" placeholder="Opcional (vacío = automático)" value={montoCierre} onChange={(event) => setMontoCierre(event.target.value)} />
               </div>
               <button className="btn-primary" type="button" disabled={saving} onClick={closeCaja}>
                 <RotateCcw size={14} /> Cerrar caja
@@ -224,7 +297,7 @@ export default function MovimientosCajaPage() {
                 <label className="m-field__label">Caja</label>
                 <select className="m-field__select" value={movCajaId} onChange={(event) => setMovCajaId(event.target.value)}>
                   <option value="">Seleccionar...</option>
-                  {cajas.map((caja) => (
+                  {cajasAbiertas.map((caja) => (
                     <option key={caja.id} value={caja.id}>Caja #{caja.id} · {caja.estado}</option>
                   ))}
                 </select>
@@ -267,9 +340,9 @@ export default function MovimientosCajaPage() {
                 </tr>
               </thead>
               <tbody>
-                {movimientos.length === 0 ? (
+                {movimientosFiltrados.length === 0 ? (
                   <tr><td className="table-empty" colSpan={6}>No hay movimientos de caja.</td></tr>
-                ) : movimientos.map((movimiento) => (
+                ) : movimientosFiltrados.map((movimiento) => (
                   <tr key={movimiento.id}>
                     <td>#{movimiento.caja}</td>
                     <td><span className={`badge badge--${movimiento.tipo === 'INGRESO' ? 'active' : 'warn'}`}>{movimiento.tipo}</span></td>

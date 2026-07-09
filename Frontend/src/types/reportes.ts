@@ -22,12 +22,17 @@ export interface Caja {
   id: number;
   empresa: number;
   sucursal: number;
+  sucursal_nombre?: string;
   usuario: number;
+  usuario_nombre?: string;
   fecha_apertura: string;
   monto_inicial: number;
   fecha_cierre: string | null;
   monto_cierre: number | null;
   estado: string;
+  total_ingresos?: number;
+  total_egresos?: number;
+  saldo_calculado?: number;
 }
 
 export interface MovimientoCaja {

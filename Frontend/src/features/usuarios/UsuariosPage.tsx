@@ -1,4 +1,6 @@
 import { useState } from 'react';
+import { useAuth } from '../../contexts/AuthContext';
+import { isAdminUser } from '../../utils/permissions';
 import TabUsuarios from './components/TabUsuarios';
 import TabRoles    from './components/TabRoles';
 import TabLogs     from './components/TabLogs';
@@ -13,7 +15,12 @@ const TABS = [
 type TabId = typeof TABS[number]['id'];
 
 export default function UsuariosPage() {
+  const { user } = useAuth();
+  const admin = isAdminUser(user);
   const [active, setActive] = useState<TabId>('usuarios');
+  const visibleTabs = admin ? TABS : TABS.filter((tab) => tab.id !== 'logs');
+
+  const safeActive: TabId = active === 'logs' && !admin ? 'usuarios' : active;
 
   return (
     <div className="upage">
@@ -25,10 +32,10 @@ export default function UsuariosPage() {
       </div>
 
       <div className="upage__tabs">
-        {TABS.map(({ id, label }) => (
+        {visibleTabs.map(({ id, label }) => (
           <button
             key={id}
-            className={`upage__tab${active === id ? ' upage__tab--active' : ''}`}
+            className={`upage__tab${safeActive === id ? ' upage__tab--active' : ''}`}
             onClick={() => setActive(id)}
           >
             {label}
@@ -37,9 +44,9 @@ export default function UsuariosPage() {
       </div>
 
       <div className="upage__content">
-        {active === 'usuarios' && <TabUsuarios />}
-        {active === 'roles'    && <TabRoles />}
-        {active === 'logs'     && <TabLogs />}
+        {safeActive === 'usuarios' && <TabUsuarios />}
+        {safeActive === 'roles'    && <TabRoles />}
+        {safeActive === 'logs'     && <TabLogs />}
       </div>
     </div>
   );

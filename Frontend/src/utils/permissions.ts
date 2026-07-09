@@ -19,7 +19,10 @@ export function can(
 
   // Rol sin permisos configurados → acceso completo (estado admin inicial)
   if (raw == null) return true;
-  if (typeof raw !== 'string') return true; // si viene como objeto/dict, ya no intentamos trim
+  if (typeof raw !== 'string') {
+    const perms = raw as Record<string, Record<string, boolean>>;
+    return perms[module]?.[action] ?? false;
+  }
   if (raw.trim() === '') return true;
 
   try {
@@ -28,6 +31,28 @@ export function can(
   } catch {
     return false;
   }
+}
+
+export function isAdminUser(user: AuthUser | null): boolean {
+  if (!user?.rol) return false;
+  const roleName = String(user.rol.nombre || '').toLowerCase();
+  if (roleName.includes('admin')) return true;
+
+  const raw = user.rol.permisos;
+  if (raw == null) return true;
+
+  if (typeof raw === 'string') {
+    const txt = raw.trim().toLowerCase();
+    if (txt === '' || txt === 'all' || txt === '*' || txt === 'admin') return true;
+    try {
+      const parsed = JSON.parse(raw) as Record<string, unknown>;
+      return parsed.__admin__ === true;
+    } catch {
+      return false;
+    }
+  }
+
+  return (raw as Record<string, unknown>).__admin__ === true;
 }
 
 /** Helpers de conveniencia */

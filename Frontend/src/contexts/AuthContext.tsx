@@ -29,7 +29,7 @@ function jwtToUser(p: Record<string, unknown>): AuthUser {
     rol: {
       id:       p['rol_id']   as number,
       nombre:   p['rol_nombre'] as string,
-      permisos: (p['permisos'] as string | null) ?? null,
+      permisos: (p['permisos'] as string | Record<string, unknown> | null) ?? null,
     },
     empresa_id:  p['empresa_id']  as number,
     sucursal_id: p['sucursal_id'] as number | null,

@@ -8,6 +8,7 @@ import { usuariosService } from '../../services/usuariosService';
 import type { Producto } from '../../types/inventario';
 import type { Sucursal } from '../../types/usuarios';
 import type { Venta, VentaCreateItem, VentaCreatePayload } from '../../types/ventas';
+import { confirmAction, notifyError, notifySuccess } from '../../utils/notify';
 import './VentasPage.css';
 
 const PAYMENT_METHODS = ['EFECTIVO', 'TARJETA', 'TRANSFERENCIA', 'CREDITO'] as const;
@@ -248,9 +249,11 @@ export default function VentasPage() {
       if (editingVenta) {
         const updated = await ventasService.updateVenta(editingVenta.id, payloadFromForm());
         setVentas((prev) => prev.map((venta) => (venta.id === updated.id ? updated : venta)));
+        await notifySuccess('Venta actualizada', `Venta #${updated.id} actualizada correctamente.`);
       } else {
         const created = await ventasService.createVenta(payloadFromForm());
         setVentas((prev) => [created, ...prev]);
+        await notifySuccess('Venta creada', `Venta #${created.id} registrada correctamente.`);
       }
       setOpen(false);
       setEditingVenta(null);
@@ -263,6 +266,8 @@ export default function VentasPage() {
 
   const handleAnular = async (venta: Venta) => {
     if (!canUpdateVenta) return;
+    const ok = await confirmAction('Anular venta', `¿Anular la venta #${venta.id}? Esta acción ajustará estado e inventario.`, 'Sí, anular');
+    if (!ok) return;
     setSaving(true);
     try {
       const payload: VentaCreatePayload = {
@@ -290,8 +295,10 @@ export default function VentasPage() {
       };
       const updated = await ventasService.updateVenta(venta.id, payload);
       setVentas((prev) => prev.map((item) => (item.id === updated.id ? updated : item)));
+      await notifySuccess('Venta anulada', `La venta #${venta.id} fue anulada.`);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'No se pudo anular la venta.');
+      await notifyError('No se pudo anular la venta.');
     } finally {
       setSaving(false);
     }
@@ -308,6 +315,7 @@ export default function VentasPage() {
       URL.revokeObjectURL(url);
     } catch {
       setError('No se pudo descargar la factura.');
+      await notifyError('No se pudo descargar la factura.');
     }
   };
 

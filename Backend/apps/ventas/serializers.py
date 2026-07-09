@@ -158,6 +158,14 @@ class CompraSerializer(serializers.ModelSerializer):
                 costo_unitario = float(item['costo_unitario'])
                 stock_anterior = float(producto.stock_actual or 0)
                 stock_resultante = stock_anterior + cantidad
+                if stock_resultante < stock_anterior:
+                    raise serializers.ValidationError({
+                        'items': f'La compra no puede disminuir el stock de {producto.nombre}.'
+                    })
+                if stock_resultante < 0:
+                    raise serializers.ValidationError({
+                        'items': f'El stock resultante de {producto.nombre} no puede ser negativo.'
+                    })
                 costo_anterior = float(producto.costo_promedio or 0)
                 producto.costo_promedio = (
                     costo_unitario if stock_resultante <= 0
@@ -365,15 +373,23 @@ class VentaWriteSerializer(serializers.ModelSerializer):
             if precio_unitario < 0:
                 raise serializers.ValidationError('El precio unitario no puede ser negativo.')
 
-            # Bugfix: si el negocio requiere inventario siempre, no permitir producto=null.
-            # Hoy el modelo permite null y el front permite “Sin producto”.
-            # Si se envía producto=null, entonces no se tocará stock/kardex (comportamiento actual).
-            # Para evitar ventas “fantasma” contra el inventario, por defecto rechazamos producto null.
+            # Evita que se creen/actualicen ventas con items sin producto.
+            # Eso puede dejar desincronizado el inventario/kardex.
             producto = item.get('producto', serializers.empty)
-            if producto is None:
+            if producto in (None, serializers.empty):
                 raise serializers.ValidationError({'items': 'Cada item debe tener un producto válido (no puede ser null).'})
 
         return items
+
+    def validate(self, attrs):
+        # Mantiene validaciones anteriores, pero garantiza que validate_items
+        # se ejecute SIEMPRE con los items que llegan desde el front.
+        attrs = super().validate(attrs) if hasattr(super(), 'validate') else attrs
+        items = attrs.get('items')
+        if items is not None:
+            self.validate_items(items)
+        return attrs
+
 
 
     def _validate_and_lock_stock(self, items_data, existing_items=None):
@@ -822,6 +838,22 @@ class MovimientoCajaSerializer(serializers.ModelSerializer):
         model = MovimientoCaja
         fields = '__all__'
         read_only_fields = ['fecha']
+
+    def validate(self, attrs):
+        tipo = (attrs.get('tipo') or '').upper()
+        if tipo not in ('INGRESO', 'EGRESO'):
+            raise serializers.ValidationError({'tipo': 'Debe ser INGRESO o EGRESO.'})
+
+        monto = attrs.get('monto')
+        if monto is None or monto <= 0:
+            raise serializers.ValidationError({'monto': 'El monto debe ser mayor que cero.'})
+
+        caja = attrs.get('caja')
+        if caja and str(caja.estado).upper() != 'ABIERTA':
+            raise serializers.ValidationError({'caja': 'Solo puedes registrar movimientos en cajas abiertas.'})
+
+        attrs['tipo'] = tipo
+        return attrs
 
     def validate_caja(self, value):
         empresa_id = self.context.get('empresa_id')

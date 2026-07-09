@@ -15,10 +15,11 @@ import {
   ChevronRight,
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
-import { canView } from '../utils/permissions';
+import { canView, isAdminUser } from '../utils/permissions';
 import type { ModuleKey } from '../types/usuarios';
 import { reportesService } from '../services/reportesService';
 import { usuariosService } from '../services/usuariosService';
+import type { AdminRealtimeNotification } from '../services/usuariosService';
 import logo360 from '../assets/Logo.png';
 import './MainLayout.css';
 
@@ -36,7 +37,7 @@ const ALL_NAV_ITEMS: {
   { group: 'Operaciones',    to: '/ventas',     icon: ShoppingCart, label: 'Ventas',      modulo: 'ventas'     },
   { group: 'Operaciones',    to: '/compras',    icon: ShoppingBag,  label: 'Compras',     modulo: 'compras'    },
   { group: 'Operaciones',    to: '/inventario', icon: Package,      label: 'Inventario',  modulo: 'inventario' },
-  { group: 'Operaciones',    to: '/caja',       icon: Wallet,       label: 'Caja',        modulo: 'ventas'     },
+  { group: 'Operaciones',    to: '/caja',       icon: Wallet,       label: 'Caja',        modulo: 'caja'       },
   { group: 'Administración', to: '/usuarios',  icon: Users,           label: 'Usuarios',     modulo: 'usuarios'     },
   { group: 'Administración', to: '/empresas',  icon: Building2,       label: 'Empresas',     modulo: 'empresas'     },
   { group: 'Reportes',       to: '/reportes',  icon: BarChart3,       label: 'Análisis',     modulo: 'reportes'     },
@@ -47,6 +48,7 @@ export default function MainLayout() {
   const navigate         = useNavigate();
   const [notifOpen, setNotifOpen] = useState(false);
   const [notifications, setNotifications] = useState<Array<{ title: string; detail: string; date: string }>>([]);
+  const admin = useMemo(() => isAdminUser(user), [user]);
 
   const handleLogout = async () => {
     await logout();
@@ -56,9 +58,13 @@ export default function MainLayout() {
   const initials = user?.nombre?.charAt(0).toUpperCase() ?? 'U';
 
   useEffect(() => {
-    if (!user) return;
+    if (!user || !admin) {
+      setNotifications([]);
+      return;
+    }
+
     let mounted = true;
-    Promise.all([usuariosService.listLogs(), reportesService.listEventos()])
+    Promise.all([usuariosService.listLogs({ limit: 100 }), reportesService.listEventos()])
       .then(([logs, eventos]) => {
         if (!mounted) return;
         const fromEvents = eventos
@@ -85,8 +91,57 @@ export default function MainLayout() {
         if (!mounted) return;
         setNotifications([]);
       });
-    return () => { mounted = false; };
-  }, [user]);
+
+    const showBackgroundAlert = (title: string, detail: string) => {
+      if (!('Notification' in window)) return;
+      if (document.visibilityState !== 'hidden') return;
+      if (Notification.permission !== 'granted') return;
+      try {
+        new Notification(title, { body: detail });
+      } catch {
+        // Silencioso para evitar errores de runtime en navegadores restringidos.
+      }
+    };
+
+    if ('Notification' in window && Notification.permission === 'default') {
+      Notification.requestPermission().catch(() => {});
+    }
+
+    const subscription = usuariosService.subscribeAdminNotifications(
+      (payload: AdminRealtimeNotification) => {
+        if (!mounted) return;
+
+        const mapped = payload.kind === 'evento'
+          ? {
+              title: payload.titulo || 'Evento próximo',
+              detail: payload.descripcion || 'Tienes un evento pendiente por revisar.',
+              date: payload.fecha,
+            }
+          : {
+              title: payload.accion || 'Actividad',
+              detail: `${payload.usuario_nombre || 'Usuario'} · ${payload.modulo || 'general'}`,
+              date: payload.fecha,
+            };
+
+        setNotifications((prev) => {
+          const dedupeKey = `${mapped.title}|${mapped.detail}|${mapped.date}`;
+          const exists = prev.some((n) => `${n.title}|${n.detail}|${n.date}` === dedupeKey);
+          if (exists) return prev;
+          return [mapped, ...prev].slice(0, 20);
+        });
+
+        showBackgroundAlert(mapped.title, mapped.detail);
+      },
+      () => {
+        // Si el stream falla, mantenemos el panel con los datos ya cargados.
+      },
+    );
+
+    return () => {
+      mounted = false;
+      subscription?.close();
+    };
+  }, [user, admin]);
 
   const notifBadge = useMemo(() => notifications.length, [notifications]);
 
@@ -160,26 +215,30 @@ export default function MainLayout() {
             />
           </div>
           <div className="erp-header__actions">
-            <button
-              className="erp-header__icon-btn"
-              aria-label="Notificaciones"
-              onClick={() => setNotifOpen((prev) => !prev)}
-            >
-              <Bell size={17} />
-              {notifBadge > 0 && <span className="erp-header__badge" aria-hidden="true" />}
-            </button>
-            {notifOpen && (
-              <div className="erp-notifs" role="dialog" aria-label="Panel de notificaciones">
-                <h4 className="erp-notifs__title">Notificaciones</h4>
-                {notifications.length === 0 && <p className="erp-notifs__empty">Sin notificaciones por ahora.</p>}
-                {notifications.map((notif, index) => (
-                  <article className="erp-notifs__item" key={`${notif.title}-${index}`}>
-                    <strong>{notif.title}</strong>
-                    <span>{notif.detail}</span>
-                    <time>{new Date(notif.date).toLocaleString('es-CO', { dateStyle: 'short', timeStyle: 'short' })}</time>
-                  </article>
-                ))}
-              </div>
+            {admin && (
+              <>
+                <button
+                  className="erp-header__icon-btn"
+                  aria-label="Notificaciones"
+                  onClick={() => setNotifOpen((prev) => !prev)}
+                >
+                  <Bell size={17} />
+                  {notifBadge > 0 && <span className="erp-header__badge" aria-hidden="true" />}
+                </button>
+                {notifOpen && (
+                  <div className="erp-notifs" role="dialog" aria-label="Panel de notificaciones">
+                    <h4 className="erp-notifs__title">Notificaciones (admin)</h4>
+                    {notifications.length === 0 && <p className="erp-notifs__empty">Sin notificaciones por ahora.</p>}
+                    {notifications.map((notif, index) => (
+                      <article className="erp-notifs__item" key={`${notif.title}-${index}`}>
+                        <strong>{notif.title}</strong>
+                        <span>{notif.detail}</span>
+                        <time>{new Date(notif.date).toLocaleString('es-CO', { dateStyle: 'short', timeStyle: 'short' })}</time>
+                      </article>
+                    ))}
+                  </div>
+                )}
+              </>
             )}
             <div className="erp-header__divider" aria-hidden="true" />
             <div className="erp-header__user">

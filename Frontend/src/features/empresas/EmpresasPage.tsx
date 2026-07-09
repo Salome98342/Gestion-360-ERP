@@ -3,6 +3,7 @@ import { Save } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { empresasService } from '../../services/empresasService';
 import { canEdit } from '../../utils/permissions';
+import { notifyError, notifySuccess } from '../../utils/notify';
 import type { Empresa } from '../../types/empresas';
 import './EmpresasPage.css';
 
@@ -44,7 +45,11 @@ export default function EmpresasPage() {
       });
       setEmpresa(u); setSuccess(true);
       setTimeout(() => setSuccess(false), 3000);
-    } catch { setError('Error al guardar los cambios.'); }
+      await notifySuccess('Empresa actualizada', 'Los cambios se guardaron correctamente.');
+    } catch {
+      setError('Error al guardar los cambios.');
+      await notifyError('No se pudieron guardar los cambios de la empresa.');
+    }
     finally { setSaving(false); }
   };
 

@@ -38,6 +38,7 @@ from apps.ventas.views import (
     AuditoriaDescuentoViewSet,
     LogActividadViewSet,
     SecuenciasViewSet,
+    stream_admin_notifications,
 )
 
 router = DefaultRouter()
@@ -74,6 +75,7 @@ router.register(r'secuencias', SecuenciasViewSet)
 
 urlpatterns = [
     path('admin/', admin.site.urls),
+    path('log-actividad/stream/', stream_admin_notifications, name='log-actividad-stream'),
     path('', include(router.urls)),
     path('auth/login/',   LoginView.as_view(),  name='auth-login'),
     path('auth/refresh/', RefreshView.as_view(), name='auth-refresh'),

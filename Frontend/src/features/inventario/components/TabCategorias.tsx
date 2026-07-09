@@ -3,6 +3,7 @@ import { Search, Plus, Edit2, Trash2, X } from 'lucide-react';
 import { inventarioService } from '../../../services/inventarioService';
 import { useAuth } from '../../../contexts/AuthContext';
 import { canCreate, canEdit, canDelete } from '../../../utils/permissions';
+import { confirmAction, notifyError, notifySuccess } from '../../../utils/notify';
 import type { Categoria } from '../../../types/inventario';
 
 export default function TabCategorias() {
@@ -38,14 +39,20 @@ export default function TabCategorias() {
       if (editing) { const u = await inventarioService.updateCategoria(editing.id, d); setCats(p => p.map(x => x.id===u.id?u:x)); }
       else         { const u = await inventarioService.createCategoria(d);             setCats(p => [...p, u]); }
       setOpen(false);
+      await notifySuccess(editing ? 'Categoría actualizada' : 'Categoría creada');
     } catch (e) { setMError(e instanceof Error ? e.message : 'Error al guardar.'); }
     finally { setSaving(false); }
   };
 
   const handleDelete = async (c: Categoria) => {
-    if (!window.confirm(`¿Eliminar la categoría "${c.nombre}"?`)) return;
-    try { await inventarioService.deleteCategoria(c.id); setCats(p => p.filter(x => x.id!==c.id)); }
-    catch { alert('No se pudo eliminar.'); }
+    const ok = await confirmAction('Eliminar categoría', `¿Eliminar la categoría "${c.nombre}"?`, 'Sí, eliminar');
+    if (!ok) return;
+    try {
+      await inventarioService.deleteCategoria(c.id);
+      setCats(p => p.filter(x => x.id!==c.id));
+      await notifySuccess('Categoría eliminada');
+    }
+    catch { await notifyError('No se pudo eliminar la categoría.'); }
   };
 
   if (loading) return <div className="table-empty">Cargando…</div>;

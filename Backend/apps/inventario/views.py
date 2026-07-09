@@ -76,7 +76,7 @@ class ProductoViewSet(EmpresaScopedViewSetMixin, viewsets.ModelViewSet):
 
 
 class CajaViewSet(EmpresaScopedViewSetMixin, viewsets.ModelViewSet):
-    modulo = 'ventas'
+    modulo = 'caja'
     permission_classes = [RolPermission]
     queryset = Caja.objects.all()
     serializer_class = CajaSerializer

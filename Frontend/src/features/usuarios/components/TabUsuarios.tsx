@@ -3,6 +3,7 @@ import { Search, Plus, Edit2, Power, X } from 'lucide-react';
 import { usuariosService } from '../../../services/usuariosService';
 import { useAuth } from '../../../contexts/AuthContext';
 import { canCreate, canEdit } from '../../../utils/permissions';
+import { confirmAction, notifyError, notifySuccess } from '../../../utils/notify';
 import type { UsuarioRead, UsuarioWrite, Rol, Sucursal } from '../../../types/usuarios';
 
 interface UserForm {
@@ -94,20 +95,26 @@ export default function TabUsuarios() {
         setUsuarios(p => [...p, u]);
       }
       setOpen(false);
+      await notifySuccess(editing ? 'Usuario actualizado' : 'Usuario creado');
     } catch (err) {
       setMError(err instanceof Error ? err.message : 'Error al guardar.');
     } finally { setSaving(false); }
   };
 
   const handleToggle = async (u: UsuarioRead) => {
-    if (!window.confirm(u.activo
-      ? `¿Desactivar el perfil de "${u.nombre}"?`
-      : `¿Reactivar el perfil de "${u.nombre}"?`
-    )) return;
+    const ok = await confirmAction(
+      u.activo ? 'Desactivar usuario' : 'Reactivar usuario',
+      u.activo
+        ? `¿Desactivar el perfil de "${u.nombre}"?`
+        : `¿Reactivar el perfil de "${u.nombre}"?`,
+      u.activo ? 'Sí, desactivar' : 'Sí, reactivar',
+    );
+    if (!ok) return;
     try {
       const r = await usuariosService.toggleActivo(u.id);
       setUsuarios(p => p.map(x => x.id === u.id ? { ...x, activo: r.activo } : x));
-    } catch { alert('No se pudo cambiar el estado.'); }
+      await notifySuccess(r.activo ? 'Usuario activado' : 'Usuario desactivado');
+    } catch { await notifyError('No se pudo cambiar el estado del usuario.'); }
   };
 
   if (loading) return <div className="table-empty">Cargando usuarios…</div>;

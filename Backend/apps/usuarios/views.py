@@ -49,6 +49,8 @@ class UsuarioViewSet(EmpresaScopedViewSetMixin, viewsets.ModelViewSet):
         usuario = self.get_object()
         usuario.activo = not usuario.activo # Ajustado a booleano
         usuario.save(update_fields=['activo'])
+        estado = 'activo' if usuario.activo else 'inactivo'
+        self.registrar_auditoria('update', usuario, extra_descripcion=f'Estado actualizado a {estado}.')
         return Response({'id': usuario.id, 'activo': usuario.activo})
 
     @action(detail=True, methods=['patch'], url_path='set-password')
@@ -63,6 +65,7 @@ class UsuarioViewSet(EmpresaScopedViewSetMixin, viewsets.ModelViewSet):
         usuario = self.get_object()
         usuario.set_password(password) # Usa el método nativo
         usuario.save(update_fields=['password'])
+        self.registrar_auditoria('update', usuario, extra_descripcion='Se actualizo la contraseña del usuario.')
         return Response({'message': 'Contraseña actualizada correctamente.'})
 
 

@@ -36,9 +36,11 @@ export function defaultPermissions(): Permissions {
 }
 
 
-export function parsePermissions(json: string | null | undefined): Permissions {
+export function parsePermissions(json: string | Record<string, unknown> | null | undefined): Permissions {
   try {
-    const parsed = json ? (JSON.parse(json) as Partial<Permissions>) : {};
+    const parsed = typeof json === 'string'
+      ? (json ? (JSON.parse(json) as Partial<Permissions>) : {})
+      : ((json ?? {}) as Partial<Permissions>);
     return { ...defaultPermissions(), ...parsed };
   } catch {
     return defaultPermissions();
@@ -55,7 +57,7 @@ export interface Rol {
   id:             number;
   empresa:        number;
   nombre:         string;
-  permisos:       string | null;
+  permisos:       string | Record<string, unknown> | null;
   usuarios_count?: number;
 }
 

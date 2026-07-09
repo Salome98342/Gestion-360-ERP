@@ -3,7 +3,7 @@
 export interface Rol {
   id: number;
   nombre: string;
-  permisos: string | null;
+  permisos: string | Record<string, unknown> | null;
 }
 
 export interface AuthUser {

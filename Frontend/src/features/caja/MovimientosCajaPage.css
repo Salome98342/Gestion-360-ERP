@@ -7,6 +7,40 @@
   margin-bottom: 16px;
 }
 
+.cash-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.cash-summary {
+  background: rgba(9, 21, 43, 0.8);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  padding: 12px;
+}
+
+.cash-summary__label {
+  display: block;
+  color: #94a3b8;
+  font-size: 0.72rem;
+  margin-bottom: 6px;
+}
+
+.cash-summary__value {
+  color: #e2e8f0;
+  font-size: 1.06rem;
+}
+
+.cash-filter-row {
+  margin-bottom: 12px;
+}
+
+.cash-filter-row .m-field {
+  max-width: 340px;
+}
+
 .cash-card {
   background: rgba(9, 21, 43, 0.8);
   border: 1px solid rgba(255, 255, 255, 0.08);

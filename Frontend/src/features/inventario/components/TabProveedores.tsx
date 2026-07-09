@@ -3,6 +3,7 @@ import { Search, Plus, Edit2, X } from 'lucide-react';
 import { inventarioService } from '../../../services/inventarioService';
 import { useAuth } from '../../../contexts/AuthContext';
 import { canCreate, canEdit } from '../../../utils/permissions';
+import { notifySuccess } from '../../../utils/notify';
 import type { Proveedor } from '../../../types/inventario';
 
 export default function TabProveedores() {
@@ -39,6 +40,7 @@ export default function TabProveedores() {
       if (editing) { const u = await inventarioService.updateProveedor(editing.id, d); setList(p => p.map(x => x.id===u.id?u:x)); }
       else         { const u = await inventarioService.createProveedor(d as Omit<Proveedor,'id'>); setList(p => [...p, u]); }
       setOpen(false);
+      await notifySuccess(editing ? 'Proveedor actualizado' : 'Proveedor creado');
     } catch(e) { setMError(e instanceof Error ? e.message : 'Error al guardar.'); }
     finally { setSaving(false); }
   };

@@ -26,6 +26,12 @@ function fmtDateTime(iso: string) {
   return new Date(iso).toLocaleString('es-CO', { dateStyle: 'short', timeStyle: 'short' });
 }
 
+function nivelLabel(nivel: 'critica' | 'aviso' | 'info') {
+  if (nivel === 'critica') return 'Critica';
+  if (nivel === 'aviso') return 'Aviso';
+  return 'Info';
+}
+
 function toDatetimeLocal(date: Date) {
   const offset = date.getTimezoneOffset() * 60000;
   return new Date(date.getTime() - offset).toISOString().slice(0, 16);
@@ -124,21 +130,23 @@ export default function ReportesPage() {
   }, [ventas]);
 
   const notificaciones = useMemo(() => {
-    const lowStock = productos.filter((p) => p.stock_actual <= 5 && p.activo === 1).slice(0, 3).map((p) => ({
-      tipo: 'Stock bajo',
-      texto: `${p.nombre} tiene stock ${p.stock_actual}`,
+    const lowStock = productos.filter((p) => p.stock_actual <= 5 && p.activo === 1).slice(0, 5).map((p) => ({
+      tipo: p.stock_actual <= 0 ? 'Stock agotado' : 'Stock bajo',
+      texto: `${p.nombre} tiene stock ${p.stock_actual}. Revisar reposicion.`,
       fecha: new Date().toISOString(),
-      nivel: 'alerta',
+      nivel: (p.stock_actual <= 0 ? 'critica' : 'aviso') as 'critica' | 'aviso' | 'info',
+      fuente: 'inventario',
     }));
 
     const pendientes = ventas
       .filter((v) => v.saldo_pendiente > 0)
-      .slice(0, 3)
+      .slice(0, 4)
       .map((v) => ({
         tipo: 'Cuenta por cobrar',
         texto: `Venta #${v.id} pendiente por ${fmtMoney(v.saldo_pendiente)}`,
         fecha: v.fecha,
-        nivel: 'aviso',
+        nivel: 'aviso' as 'critica' | 'aviso' | 'info',
+        fuente: 'ventas',
       }));
 
     const proximosEventos = eventos
@@ -146,25 +154,34 @@ export default function ReportesPage() {
         const diff = new Date(e.fecha).getTime() - Date.now();
         return diff >= 0 && diff <= 7 * 24 * 60 * 60 * 1000;
       })
-      .slice(0, 3)
+      .slice(0, 4)
       .map((e) => ({
         tipo: 'Evento cercano',
         texto: `${e.titulo} - ${fmtDateTime(e.fecha)}`,
         fecha: e.fecha,
-        nivel: 'info',
+        nivel: 'info' as 'critica' | 'aviso' | 'info',
+        fuente: 'agenda',
       }));
 
-    const actividad = logs.slice(0, 4).map((log) => ({
+    const actividad = logs.slice(0, 6).map((log) => ({
       tipo: 'Actividad',
-      texto: `${log.usuario_nombre}: ${log.accion}`,
+      texto: `${log.usuario_nombre}: ${log.accion}${log.descripcion ? ` · ${log.descripcion}` : ''}`,
       fecha: log.fecha,
-      nivel: 'info',
+      nivel: 'info' as 'critica' | 'aviso' | 'info',
+      fuente: (log.modulo || 'sistema').toLowerCase(),
     }));
 
     return [...lowStock, ...pendientes, ...proximosEventos, ...actividad]
       .sort((a, b) => +new Date(b.fecha) - +new Date(a.fecha))
-      .slice(0, 8);
+      .slice(0, 14);
   }, [eventos, logs, productos, ventas]);
+
+  const alertStats = useMemo(() => {
+    const critica = notificaciones.filter((n) => n.nivel === 'critica').length;
+    const aviso = notificaciones.filter((n) => n.nivel === 'aviso').length;
+    const info = notificaciones.filter((n) => n.nivel === 'info').length;
+    return { critica, aviso, info };
+  }, [notificaciones]);
 
   const monthStart = startOfMonth(calendarDate);
   const monthEnd = endOfMonth(calendarDate);
@@ -372,12 +389,21 @@ export default function ReportesPage() {
           <div className="report-card__head">
             <h3><Bell size={15} /> Notificaciones</h3>
           </div>
+          <div className="report-alert-stats">
+            <span className="report-alert-pill report-alert-pill--critica">Criticas: {alertStats.critica}</span>
+            <span className="report-alert-pill report-alert-pill--aviso">Avisos: {alertStats.aviso}</span>
+            <span className="report-alert-pill report-alert-pill--info">Info: {alertStats.info}</span>
+          </div>
           <div className="report-list">
             {notificaciones.length === 0 && <p className="report-empty">No hay notificaciones por ahora.</p>}
             {notificaciones.map((notif, idx) => (
-              <article key={`${notif.tipo}-${idx}`} className="report-list__item">
-                <strong>{notif.tipo}</strong>
+              <article key={`${notif.tipo}-${idx}`} className={`report-list__item report-list__item--${notif.nivel}`}>
+                <strong>
+                  {notif.tipo}
+                  <span className={`report-level report-level--${notif.nivel}`}>{nivelLabel(notif.nivel)}</span>
+                </strong>
                 <span>{notif.texto}</span>
+                <span className="report-source">Fuente: {notif.fuente}</span>
                 <time>{fmtDateTime(notif.fecha)}</time>
               </article>
             ))}

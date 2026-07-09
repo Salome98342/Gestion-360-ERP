@@ -9,6 +9,7 @@ import type { Producto, Proveedor } from '../../types/inventario';
 import type { Sucursal } from '../../types/usuarios';
 import type { Compra, CompraCreateItem, CompraCreatePayload } from '../../types/ventas';
 import { COMPRA_ESTADOS } from '../../types/ventas';
+import { notifySuccess } from '../../utils/notify';
 import './ComprasPage.css';
 
 function fmt(n: number) {
@@ -141,6 +142,7 @@ export default function ComprasPage() {
       const created = await ventasService.createCompra(payload);
       setCompras((prev) => [created, ...prev]);
       setOpen(false);
+      await notifySuccess('Compra registrada', `Compra #${created.id} creada correctamente.`);
     } catch (e) {
       setMError(e instanceof Error ? e.message : 'No se pudo registrar la compra.');
     } finally {

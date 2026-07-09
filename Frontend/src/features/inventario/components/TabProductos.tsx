@@ -6,6 +6,7 @@ import { canCreate, canEdit, canDelete } from '../../../utils/permissions';
 import type { Producto, ProductoWrite, Categoria, Proveedor } from '../../../types/inventario';
 import type { Sucursal } from '../../../types/usuarios';
 import { usuariosService } from '../../../services/usuariosService';
+import { confirmAction, notifyError, notifySuccess } from '../../../utils/notify';
 
 interface PForm { nombre:string; precio_compra:string; precio_venta:string; costo_promedio:string; margen_porcentaje:string; stock_actual:string; categoria:string; sucursal:string; proveedor:string; activo:string; }
 const EMPTY: PForm = { nombre:'', precio_compra:'', precio_venta:'', costo_promedio:'0', margen_porcentaje:'0', stock_actual:'0', categoria:'', sucursal:'', proveedor:'', activo:'1' };
@@ -28,8 +29,19 @@ export default function TabProductos() {
   const [open,   setOpen]   = useState(false);
   const [editing,setEditing]= useState<Producto|null>(null);
   const [form,   setForm]   = useState<PForm>(EMPTY);
+  const [autoMargen, setAutoMargen] = useState(true);
   const [saving, setSaving] = useState(false);
   const [mError, setMError] = useState<string|null>(null);
+
+  const calcPrecioVenta = (precioCompra: string, margen: string) => {
+    const compraNum = Number(precioCompra);
+    const margenNum = Number(margen);
+    if (Number.isNaN(compraNum) || compraNum <= 0 || Number.isNaN(margenNum) || margenNum < 0) {
+      return '';
+    }
+    const venta = compraNum * (1 + margenNum / 100);
+    return String(Math.round(venta * 100) / 100);
+  };
 
   const load = useCallback(async () => {
     setLoading(true); setError(null);
@@ -62,24 +74,18 @@ export default function TabProductos() {
     setForm(p => {
       const next = { ...p, [k]: v };
 
-      // Recalcular SIEMPRE precio_venta con compra + margen
-      const compraNum = Number(next.precio_compra);
-      const margenNum = Number(next.margen_porcentaje);
-
-      if (!Number.isNaN(compraNum) && compraNum > 0 && !Number.isNaN(margenNum) && margenNum >= 0) {
-        const venta = compraNum * (1 + margenNum / 100);
-        next.precio_venta = String(Math.round(venta * 100) / 100);
-      } else if (!next.precio_compra) {
-        next.precio_venta = '';
+      if (autoMargen && (k === 'precio_compra' || k === 'margen_porcentaje')) {
+        next.precio_venta = calcPrecioVenta(next.precio_compra, next.margen_porcentaje);
       }
 
       return next;
     });
   };
 
-  const openCreate = () => { setEditing(null); setForm(EMPTY); setMError(null); setOpen(true); };
+  const openCreate = () => { setEditing(null); setAutoMargen(true); setForm(EMPTY); setMError(null); setOpen(true); };
   const openEdit   = (p: Producto) => {
     setEditing(p);
+    setAutoMargen(false);
     setForm({
       nombre: p.nombre,
       precio_compra: String(p.precio_compra),
@@ -101,9 +107,14 @@ export default function TabProductos() {
 
     const precioCompraNum = Number(form.precio_compra);
     const margenNum = Number(form.margen_porcentaje);
+    const stockNum = Number(form.stock_actual);
+    const precioVentaCalculado = calcPrecioVenta(form.precio_compra, form.margen_porcentaje);
+    const precioVentaNum = autoMargen ? Number(precioVentaCalculado) : Number(form.precio_venta);
 
     if (Number.isNaN(precioCompraNum) || precioCompraNum <= 0) { setMError('El precio de compra debe ser mayor a 0.'); return; }
     if (Number.isNaN(margenNum) || margenNum < 0) { setMError('El margen % no puede ser negativo.'); return; }
+    if (Number.isNaN(stockNum) || stockNum < 0) { setMError('El stock actual no puede ser negativo.'); return; }
+    if (Number.isNaN(precioVentaNum) || precioVentaNum <= 0) { setMError('El precio de venta debe ser mayor a 0.'); return; }
 
     setSaving(true);
     try {
@@ -111,10 +122,11 @@ export default function TabProductos() {
         empresa: me!.empresa_id,
         nombre: form.nombre.trim(),
         precio_compra: precioCompraNum,
-        precio_venta: Number(form.precio_venta),
-        costo_promedio: Number(form.costo_promedio),
+        precio_venta: precioVentaNum,
+        costo_promedio: editing ? Number(form.costo_promedio) : undefined,
         margen_porcentaje: margenNum,
-        stock_actual: Number(form.stock_actual),
+        stock_actual: stockNum,
+        calcular_por_margen: autoMargen,
         sucursal: Number(form.sucursal),
         categoria: form.categoria ? Number(form.categoria) : null,
         proveedor: form.proveedor ? Number(form.proveedor) : null,
@@ -128,14 +140,20 @@ export default function TabProductos() {
         setProductos(p => [...p, u]);
       }
       setOpen(false);
+      await notifySuccess(editing ? 'Producto actualizado' : 'Producto creado');
     } catch (e) { setMError(e instanceof Error ? e.message : 'Error al guardar.'); }
     finally { setSaving(false); }
   };
 
   const handleDelete = async (p: Producto) => {
-    if (!window.confirm(`¿Eliminar "${p.nombre}"? Esta acción no se puede deshacer.`)) return;
-    try { await inventarioService.deleteProducto(p.id); setProductos(ps => ps.filter(x => x.id !== p.id)); }
-    catch { alert('No se pudo eliminar el producto.'); }
+    const ok = await confirmAction('Eliminar producto', `¿Eliminar "${p.nombre}"? Esta acción no se puede deshacer.`, 'Sí, eliminar');
+    if (!ok) return;
+    try {
+      await inventarioService.deleteProducto(p.id);
+      setProductos(ps => ps.filter(x => x.id !== p.id));
+      await notifySuccess('Producto eliminado');
+    }
+    catch { await notifyError('No se pudo eliminar el producto.'); }
   };
 
   if (loading) return <div className="table-empty">Cargando productos…</div>;
@@ -206,12 +224,12 @@ export default function TabProductos() {
                 const compra = Number(form.precio_compra);
                 const margen = Number(form.margen_porcentaje);
                 const costo = Number(form.costo_promedio);
-                if (!Number.isNaN(compra) && compra > 0 && !Number.isNaN(margen) && margen >= 0 && !Number.isNaN(costo)) {
-                  const venta = compra * (1 + margen / 100);
+                const venta = autoMargen ? Number(calcPrecioVenta(form.precio_compra, form.margen_porcentaje)) : Number(form.precio_venta);
+                if (editing && !Number.isNaN(compra) && compra > 0 && !Number.isNaN(margen) && margen >= 0 && !Number.isNaN(costo) && !Number.isNaN(venta)) {
                   if (venta < costo) {
                     return (
                       <div className="modal-warning" style={{ color: '#f59e0b', marginBottom: 10 }}>
-                        Advertencia: el precio de venta calculado es menor al costo promedio.
+                        Advertencia: el precio de venta es menor al costo promedio.
                       </div>
                     );
                   }
@@ -240,21 +258,40 @@ export default function TabProductos() {
                     value={form.precio_venta}
                     onChange={f('precio_venta')}
                     placeholder="0"
+                    disabled={autoMargen}
                   />
                 </div>
               </div>
 
-              <div className="modal-row">
-                <div className="m-field"><label className="m-field__label">Costo promedio</label>
-                  <input type="number" className="m-field__input" value={form.costo_promedio} onChange={f('costo_promedio')} placeholder="0"/>
+              {editing && (
+                <div className="modal-row">
+                  <div className="m-field"><label className="m-field__label">Costo promedio</label>
+                    <input type="number" className="m-field__input" value={form.costo_promedio} onChange={f('costo_promedio')} placeholder="0"/>
+                  </div>
                 </div>
-              </div>
+              )}
               <div className="modal-row modal-row-3">
                 <div className="m-field"><label className="m-field__label">Margen %</label>
                   <input type="number" className="m-field__input" value={form.margen_porcentaje} onChange={f('margen_porcentaje')} placeholder="0"/>
+                  <button
+                    type="button"
+                    className="btn-cancel"
+                    style={{ marginTop: 8 }}
+                    onClick={() => {
+                      setAutoMargen(prev => {
+                        const next = !prev;
+                        if (next) {
+                          setForm(curr => ({ ...curr, precio_venta: calcPrecioVenta(curr.precio_compra, curr.margen_porcentaje) }));
+                        }
+                        return next;
+                      });
+                    }}
+                  >
+                    {autoMargen ? 'Margen automatico: SI' : 'Margen automatico: NO'}
+                  </button>
                 </div>
                 <div className="m-field"><label className="m-field__label">Stock actual</label>
-                  <input type="number" className="m-field__input" value={form.stock_actual} onChange={f('stock_actual')} placeholder="0"/>
+                  <input type="number" min="0" className="m-field__input" value={form.stock_actual} onChange={f('stock_actual')} placeholder="0"/>
                 </div>
                 <div className="m-field"><label className="m-field__label">Estado</label>
                   <select className="m-field__select" value={form.activo} onChange={f('activo')}>
