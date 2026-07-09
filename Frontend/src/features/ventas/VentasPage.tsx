@@ -209,7 +209,7 @@ export default function VentasPage() {
     estado,
     fecha_vencimiento: null,
     items: items.map<VentaCreateItem>((item) => ({
-      producto: item.producto ? Number(item.producto) : null,
+      producto: Number(item.producto),
       descripcion: item.descripcion.trim(),
       cantidad: toNumber(item.cantidad),
       precio_unitario: toNumber(item.precio_unitario),
@@ -217,6 +217,7 @@ export default function VentasPage() {
       tipo_pago: form.metodo_pago,
     })),
   });
+
 
   const handleSave = async () => {
     setMError(null);
@@ -232,10 +233,11 @@ export default function VentasPage() {
       setMError('Cada item debe tener cantidad mayor que cero y precio valido.');
       return;
     }
-    if (items.some((item) => !item.producto && !item.descripcion.trim())) {
-      setMError('Cada item debe tener producto o descripcion.');
+    if (items.some((item) => !item.producto)) {
+      setMError('Cada item debe seleccionar un producto.');
       return;
     }
+
     if (form.metodo_pago === 'EFECTIVO' && computed.total > 0 && computed.recibido <= 0) {
       setMError('Ingresa el efectivo recibido.');
       return;
@@ -449,11 +451,11 @@ export default function VentasPage() {
                         <div className="m-field">
                           <label className="m-field__label">Producto</label>
                           <select className="m-field__select" value={item.producto} onChange={(event) => updateItem(index, 'producto', event.target.value)}>
-                            <option value="">Sin producto</option>
                             {productos.map((producto) => (
                               <option key={producto.id} value={producto.id}>{producto.nombre} - stock {producto.stock_actual}</option>
                             ))}
                           </select>
+
                         </div>
                         <div className="m-field">
                           <label className="m-field__label">Descripcion</label>

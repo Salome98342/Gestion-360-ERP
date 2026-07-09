@@ -1,4 +1,5 @@
-from rest_framework import viewsets
+from rest_framework import viewsets, filters
+from django_filters.rest_framework import DjangoFilterBackend
 
 from apps.mixins import EmpresaScopedViewSetMixin
 from apps.usuarios.permissions import RolPermission
@@ -35,6 +36,9 @@ class ClienteViewSet(EmpresaScopedViewSetMixin, viewsets.ModelViewSet):
     permission_classes = [RolPermission]
     queryset = Cliente.objects.select_related('tipo_cliente').all()
     serializer_class = ClienteSerializer
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter]
+    filterset_fields = ['activo', 'tipo_cliente']
+    search_fields = ['nombre', 'telefono']
 
 
 class ProveedorViewSet(EmpresaScopedViewSetMixin, viewsets.ModelViewSet):
@@ -42,12 +46,20 @@ class ProveedorViewSet(EmpresaScopedViewSetMixin, viewsets.ModelViewSet):
     permission_classes = [RolPermission]
     queryset = Proveedor.objects.all()
     serializer_class = ProveedorSerializer
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter]
+    filterset_fields = ['activo']
+    search_fields = ['nombre', 'nit', 'telefono']
 
 
 class ProductoViewSet(EmpresaScopedViewSetMixin, viewsets.ModelViewSet):
     modulo = 'inventario'
     permission_classes = [RolPermission, LicenciaPermission]
     queryset = Producto.objects.all()
+    
+    # Implementación limpia de filtros nativos
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter]
+    filterset_fields = ['categoria', 'activo']
+    search_fields = ['nombre']
 
     def get_serializer_class(self):
         if self.action in ('create', 'update', 'partial_update'):
@@ -55,24 +67,12 @@ class ProductoViewSet(EmpresaScopedViewSetMixin, viewsets.ModelViewSet):
         return ProductoReadSerializer
 
     def get_queryset(self):
-        qs = (
+        return (
             super()
             .get_queryset()
             .select_related('categoria', 'proveedor', 'sucursal')
+            .order_by('nombre')
         )
-
-        categoria = self.request.query_params.get('categoria')
-        activo = self.request.query_params.get('activo')
-        search = self.request.query_params.get('search')
-
-        if categoria:
-            qs = qs.filter(categoria_id=categoria)
-        if activo is not None and activo != '':
-            qs = qs.filter(activo=activo)
-        if search:
-            qs = qs.filter(nombre__icontains=search)
-
-        return qs.order_by('nombre')
 
 
 class CajaViewSet(EmpresaScopedViewSetMixin, viewsets.ModelViewSet):
@@ -80,7 +80,8 @@ class CajaViewSet(EmpresaScopedViewSetMixin, viewsets.ModelViewSet):
     permission_classes = [RolPermission]
     queryset = Caja.objects.all()
     serializer_class = CajaSerializer
+    filter_backends = [DjangoFilterBackend]
+    filterset_fields = ['estado', 'sucursal', 'usuario']
 
     def get_queryset(self):
-        return super().get_queryset().order_by('-id')
-
+        return super().get_queryset().select_related('sucursal', 'usuario').order_by('-id')

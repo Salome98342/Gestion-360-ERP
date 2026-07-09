@@ -7,7 +7,9 @@ export const SYSTEM_MODULES = [
   { key: 'usuarios',   label: 'Usuarios'    },
   { key: 'empresas',   label: 'Empresas'    },
   { key: 'reportes',   label: 'Reportes'    },
+  { key: 'caja',       label: 'Caja'        },
 ] as const;
+
 
 export const SYSTEM_ACTIONS = [
   { key: 'ver',      label: 'Ver'      },
@@ -29,8 +31,10 @@ export function defaultPermissions(): Permissions {
     usuarios:   { ver: false, crear: false, editar: false, eliminar: false },
     empresas:   { ver: false, crear: false, editar: false, eliminar: false },
     reportes:   { ver: false, crear: false, editar: false, eliminar: false },
+    caja:       { ver: false, crear: false, editar: false, eliminar: false },
   };
 }
+
 
 export function parsePermissions(json: string | null | undefined): Permissions {
   try {

@@ -9,6 +9,7 @@ class CategoriaAdmin(admin.ModelAdmin):
     search_fields = ("nombre", "empresa__nombre")
     list_filter = ("activa", "empresa")
     autocomplete_fields = ("empresa",)
+    list_select_related = ("empresa",)
 
 
 @admin.register(TipoCliente)
@@ -17,6 +18,7 @@ class TipoClienteAdmin(admin.ModelAdmin):
     search_fields = ("nombre", "empresa__nombre")
     list_filter = ("empresa",)
     autocomplete_fields = ("empresa",)
+    list_select_related = ("empresa",)
 
 
 @admin.register(Cliente)
@@ -25,6 +27,7 @@ class ClienteAdmin(admin.ModelAdmin):
     search_fields = ("nombre", "telefono", "empresa__nombre")
     list_filter = ("activo", "empresa", "tipo_cliente")
     autocomplete_fields = ("empresa", "tipo_cliente")
+    list_select_related = ("empresa", "tipo_cliente")
 
 
 @admin.register(Proveedor)
@@ -33,6 +36,7 @@ class ProveedorAdmin(admin.ModelAdmin):
     search_fields = ("nombre", "nit", "telefono", "empresa__nombre")
     list_filter = ("activo", "empresa")
     autocomplete_fields = ("empresa",)
+    list_select_related = ("empresa",)
 
 
 @admin.register(Producto)
@@ -41,6 +45,7 @@ class ProductoAdmin(admin.ModelAdmin):
     search_fields = ("nombre", "empresa__nombre")
     list_filter = ("activo", "empresa", "categoria")
     autocomplete_fields = ("empresa", "categoria", "sucursal", "proveedor")
+    list_select_related = ("empresa", "categoria", "sucursal", "proveedor")
 
 
 @admin.register(Caja)
@@ -49,4 +54,4 @@ class CajaAdmin(admin.ModelAdmin):
     search_fields = ("estado", "empresa__nombre", "usuario__username", "sucursal__nombre")
     list_filter = ("empresa", "estado")
     autocomplete_fields = ("empresa", "sucursal", "usuario")
-
+    list_select_related = ("empresa", "sucursal", "usuario")

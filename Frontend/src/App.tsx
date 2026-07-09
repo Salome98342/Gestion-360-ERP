@@ -43,8 +43,11 @@ function App() {
             <Route path="/compras"    element={<ModuleGuard module="compras"><ComprasPage /></ModuleGuard>} />
             <Route path="/empresas"   element={<ModuleGuard module="empresas"><EmpresasPage /></ModuleGuard>} />
             <Route path="/reportes"   element={<ModuleGuard module="reportes"><ReportesPage /></ModuleGuard>} />
-            <Route path="/caja"       element={<ModuleGuard module="ventas"><MovimientosCajaPage /></ModuleGuard>} />
+            <Route path="/caja"       element={<ModuleGuard module="caja"><MovimientosCajaPage /></ModuleGuard>} />
+
           </Route>
+
+
           <Route path="*" element={<Navigate to="/dashboard" replace />} />
         </Routes>
       </BrowserRouter>

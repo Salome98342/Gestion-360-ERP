@@ -298,6 +298,38 @@ class VentaWriteSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError({'items': 'Uno de los productos no pertenece a tu empresa.'})
         return attrs
 
+    def _consolidar_items_por_producto(self, items_data):
+        """Consolida cantidades por producto para evitar desincronización.
+
+        Mantiene la primera descripción/tipo_pago (el precio_unitario/costo_unitario
+        se calcula luego por item consolidado).
+        """
+        consolidado = {}
+        orden = []
+        for item in items_data:
+            producto = item.get('producto')
+            if producto is None:
+                # La validación validate_items ya debería impedirlo.
+                continue
+            producto_id = producto.id
+            if producto_id not in consolidado:
+                consolidado[producto_id] = {
+                    'producto': producto,
+                    'descripcion': item.get('descripcion') or '',
+                    'cantidad': 0.0,
+                    'precio_unitario': float(item.get('precio_unitario') or 0),
+                    'costo_unitario': float(item.get('costo_unitario') or 0) if item.get('costo_unitario') is not None else None,
+                    'utilidad_hint': None,
+                    'tipo_pago': item.get('tipo_pago') or 'EFECTIVO',
+                }
+                orden.append(producto_id)
+            consolidado[producto_id]['cantidad'] += float(item['cantidad'])
+
+        # Para efectos contables, para productos consolidados tomamos el primer precio/costo unitario
+        # (si el front manda distintos precios por la misma referencia, eso ya es inconsistente).
+        return [consolidado[pid] for pid in orden]
+
+
     def _ensure_cliente(self, data):
         nombre_input = (data.get('cliente_nombre') or '').strip()
         documento = (data.get('cliente_documento') or '').strip()
@@ -323,32 +355,63 @@ class VentaWriteSerializer(serializers.ModelSerializer):
     def validate_items(self, items):
         if not items:
             raise serializers.ValidationError('Debes agregar al menos un item a la venta.')
+
         for item in items:
             cantidad = item.get('cantidad') or 0
             precio_unitario = item.get('precio_unitario') or 0
+
             if cantidad <= 0:
                 raise serializers.ValidationError('La cantidad de cada item debe ser mayor que cero.')
             if precio_unitario < 0:
                 raise serializers.ValidationError('El precio unitario no puede ser negativo.')
+
+            # Bugfix: si el negocio requiere inventario siempre, no permitir producto=null.
+            # Hoy el modelo permite null y el front permite “Sin producto”.
+            # Si se envía producto=null, entonces no se tocará stock/kardex (comportamiento actual).
+            # Para evitar ventas “fantasma” contra el inventario, por defecto rechazamos producto null.
+            producto = item.get('producto', serializers.empty)
+            if producto is None:
+                raise serializers.ValidationError({'items': 'Cada item debe tener un producto válido (no puede ser null).'})
+
         return items
 
-    def _validate_stock(self, items_data, existing_items=None):
+
+    def _validate_and_lock_stock(self, items_data, existing_items=None):
+        """Valida stock y aplica locks consistentes dentro de un mismo transaction.
+
+        existing_items:
+          - en update() se usan para "restaurar" stock del estado anterior (antes de recalcular).
+        """
         requested = {}
         restored = {}
+
         for item in items_data:
             producto = item.get('producto')
-            if producto:
+            if producto is not None:
                 requested[producto.id] = requested.get(producto.id, 0) + float(item['cantidad'])
+
         for item in existing_items or []:
-            if item.producto_id:
+            if getattr(item, 'producto_id', None):
                 restored[item.producto_id] = restored.get(item.producto_id, 0) + float(item.cantidad)
+
+        # Lock por producto para evitar race conditions.
+        producto_ids = list(requested.keys())
+        productos = list(Producto.objects.select_for_update().filter(pk__in=producto_ids))
+        producto_map = {p.id: p for p in productos}
+
         for producto_id, cantidad in requested.items():
-            producto = Producto.objects.get(pk=producto_id)
+            producto = producto_map.get(producto_id)
+            if not producto:
+                raise serializers.ValidationError({'items': 'Producto no encontrado.'})
+
             disponible = float(producto.stock_actual or 0) + restored.get(producto_id, 0)
             if cantidad > disponible:
                 raise serializers.ValidationError({
                     'items': f'Stock insuficiente para {producto.nombre}. Disponible: {disponible:g}.'
                 })
+
+        return producto_map
+
 
     def _totals_from_items(self, items_data):
         subtotal = 0.0
@@ -408,33 +471,78 @@ class VentaWriteSerializer(serializers.ModelSerializer):
         if float(validated_data['total_pagado'] or 0) - float(validated_data['total'] or 0) > 0.01:
             raise serializers.ValidationError({'total_pagado': 'El pago no puede superar el total de la venta.'})
 
-        self._validate_stock(items_data)
-        validated_data['estado'] = _venta_estado(validated_data['total'], validated_data['total_pagado'], validated_data.get('estado'))
+        # Consolida por producto para que validación y aplicación usen exactamente los mismos totales.
+        items_data = self._consolidar_items_por_producto(items_data)
 
+        # Validación + locks deben ocurrir dentro del mismo atomic para consistencia.
         with transaction.atomic():
+            # Asegura locks consistentes para los productos involucrados.
+            producto_map = self._validate_and_lock_stock(items_data)
+
+
+            validated_data['estado'] = _venta_estado(
+                validated_data['total'],
+                validated_data['total_pagado'],
+                validated_data.get('estado'),
+            )
+
             venta = Venta.objects.create(**validated_data)
-            if venta.saldo_pendiente > 0 and venta.cliente_nombre != 'Consumidor final':
-                venta.cliente.saldo_actual = float(venta.cliente.saldo_actual or 0) + venta.saldo_pendiente
-                venta.cliente.save(update_fields=['saldo_actual'])
+
+            # Ajuste saldo cliente: criterio robusto (evitar string frágil).
+            # Si cliente_nombre no coincide con el texto exacto, antes se rompía el saldo.
+            # Aquí lo tratamos como "consumidor final" cuando el cliente aún no tiene documento o es el default.
+            if venta.saldo_pendiente > 0:
+                # Regla robusta: si el cliente es el default (consumidor final) normalmente
+                # tiene documento vacío; en ese caso NO ajustamos saldo.
+                # Si tu regla de negocio cambia, ajusta este criterio.
+                es_consumidor_final = not (venta.cliente_documento or '').strip() and (
+                    (venta.cliente_nombre or '').strip().lower() == 'consumidor final' or not (venta.cliente_nombre or '').strip()
+                )
+                if not es_consumidor_final:
+                    venta.cliente.saldo_actual = float(venta.cliente.saldo_actual or 0) + venta.saldo_pendiente
+                    venta.cliente.save(update_fields=['saldo_actual'])
+
+
             _registrar_movimiento_caja(
-                venta.usuario, venta.sucursal, 'INGRESO', float(venta.total_pagado or 0),
-                'Pago inicial de venta', f'Venta #{venta.id}',
+                venta.usuario,
+                venta.sucursal,
+                'INGRESO',
+                float(venta.total_pagado or 0),
+                'Pago inicial de venta',
+                f'Venta #{venta.id}',
             )
 
             for item in items_data:
                 cantidad = float(item['cantidad'])
                 precio_unitario = float(item['precio_unitario'])
                 producto = item.get('producto')
-                costo_unitario = float(item.get('costo_unitario') or (producto.costo_promedio if producto else 0) or 0)
-                if producto:
-                    producto = Producto.objects.select_for_update().get(pk=producto.pk)
-                    stock_anterior = float(producto.stock_actual or 0)
-                    stock_resultante = stock_anterior - cantidad
-                    producto.stock_actual = stock_resultante
-                    producto.save(update_fields=['stock_actual'])
+
+                producto_locked = producto_map.get(producto.id)
+                if not producto_locked:
+                    raise serializers.ValidationError({'items': 'Producto no encontrado.'})
+
+                stock_anterior = float(producto_locked.stock_actual or 0)
+                stock_resultante = stock_anterior - cantidad
+
+                # Asegura que no quede negativo por errores de precisión.
+                if stock_resultante < 0:
+                    if stock_resultante > -0.0001:
+                        stock_resultante = 0
+                    else:
+                        raise serializers.ValidationError({
+                            'items': f'Stock insuficiente en {producto_locked.nombre}. Disponible: {stock_anterior:g}, solicitado: {cantidad:g}.'
+                        })
+
+                producto_locked.stock_actual = stock_resultante
+
+                producto_locked.save(update_fields=['stock_actual'])
+
+
+                costo_unitario = float(item.get('costo_unitario') or producto_locked.costo_promedio or 0)
+
                 ItemVenta.objects.create(
                     venta=venta,
-                    producto=producto,
+                    producto=producto_locked,
                     descripcion=item.get('descripcion') or '',
                     cantidad=cantidad,
                     precio_unitario=precio_unitario,
@@ -443,12 +551,23 @@ class VentaWriteSerializer(serializers.ModelSerializer):
                     utilidad=cantidad * (precio_unitario - costo_unitario),
                     tipo_pago=item.get('tipo_pago') or 'EFECTIVO',
                 )
-                if producto:
-                    _registrar_kardex(
-                        venta.empresa, producto, venta.sucursal, 'VENTA', cantidad, costo_unitario,
-                        stock_anterior, stock_resultante, f'Venta #{venta.id}', venta.usuario,
-                    )
+
+                _registrar_kardex(
+                    venta.empresa,
+                    producto_locked,
+                    venta.sucursal,
+                    'VENTA',
+                    cantidad,
+                    costo_unitario,
+                    stock_anterior,
+                    stock_resultante,
+                    f'Venta #{venta.id}',
+                    venta.usuario,
+                )
+
         return venta
+
+
 
     def update(self, instance, validated_data):
         items_data = validated_data.pop('items', None)
@@ -472,49 +591,111 @@ class VentaWriteSerializer(serializers.ModelSerializer):
             old_items = list(instance.items.select_related('producto').all())
             if items_data is not None:
                 is_annulled = (instance.estado or '').upper() == 'ANULADO'
+
+                producto_map = None
                 if not is_annulled:
-                    self._validate_stock(items_data, old_items)
-                for old_item in old_items:
-                    if old_item.producto_id:
-                        producto = Producto.objects.select_for_update().get(pk=old_item.producto_id)
-                        stock_anterior = float(producto.stock_actual or 0)
-                        stock_resultante = stock_anterior + float(old_item.cantidad)
-                        producto.stock_actual = stock_resultante
-                        producto.save(update_fields=['stock_actual'])
-                        _registrar_kardex(
-                            instance.empresa, producto, instance.sucursal, 'AJUSTE_VENTA', float(old_item.cantidad),
-                            float(old_item.costo_unitario or 0), stock_anterior, stock_resultante,
-                            f'Ajuste venta #{instance.id}', instance.usuario,
-                        )
+                    # Revalida y bloquea productos de forma consistente.
+                    producto_map = self._validate_and_lock_stock(items_data, old_items)
+
+                    # Restaurar stock anterior y kardex de ajuste.
+                    for old_item in old_items:
+                        if old_item.producto_id:
+                            producto_locked = producto_map.get(old_item.producto_id)
+                            if not producto_locked:
+                                producto_locked = Producto.objects.select_for_update().get(pk=old_item.producto_id)
+
+                            stock_anterior = float(producto_locked.stock_actual or 0)
+                            stock_resultante = stock_anterior + float(old_item.cantidad)
+                            producto_locked.stock_actual = stock_resultante
+                            producto_locked.save(update_fields=['stock_actual'])
+
+                            _registrar_kardex(
+                                instance.empresa,
+                                producto_locked,
+                                instance.sucursal,
+                                'AJUSTE_VENTA',
+                                float(old_item.cantidad),
+                                float(old_item.costo_unitario or 0),
+                                stock_anterior,
+                                stock_resultante,
+                                f'Ajuste venta #{instance.id}',
+                                instance.usuario,
+                            )
+
                 instance.items.all().delete()
+
+                # Consolida por producto para que validación y aplicación usen exactamente los mismos totales.
+                items_data = self._consolidar_items_por_producto(items_data)
+
                 for item in items_data:
                     cantidad = float(item['cantidad'])
                     precio_unitario = float(item['precio_unitario'])
                     producto = item.get('producto')
-                    costo_unitario = float(item.get('costo_unitario') or (producto.costo_promedio if producto else 0) or 0)
-                    if producto and not is_annulled:
-                        producto = Producto.objects.select_for_update().get(pk=producto.pk)
-                        stock_anterior = float(producto.stock_actual or 0)
+
+                    producto_locked = producto_map.get(producto.id) if producto_map else None
+
+                    if producto_locked is not None and not is_annulled:
+                        stock_anterior = float(producto_locked.stock_actual or 0)
                         stock_resultante = stock_anterior - cantidad
-                        producto.stock_actual = stock_resultante
-                        producto.save(update_fields=['stock_actual'])
-                    ItemVenta.objects.create(
-                        venta=instance,
-                        producto=producto,
-                        descripcion=item.get('descripcion') or '',
-                        cantidad=cantidad,
-                        precio_unitario=precio_unitario,
-                        costo_unitario=costo_unitario,
-                        subtotal=cantidad * precio_unitario,
-                        utilidad=cantidad * (precio_unitario - costo_unitario),
-                        tipo_pago=item.get('tipo_pago') or 'EFECTIVO',
-                    )
-                    if producto and not is_annulled:
-                        _registrar_kardex(
-                            instance.empresa, producto, instance.sucursal, 'VENTA', cantidad, costo_unitario,
-                            stock_anterior, stock_resultante, f'Venta #{instance.id}', instance.usuario,
+
+                        # Asegura que no quede negativo por errores de precisión.
+                        if stock_resultante < 0:
+                            if stock_resultante > -0.0001:
+                                stock_resultante = 0
+                            else:
+                                raise serializers.ValidationError({
+                                    'items': f'Stock insuficiente en {producto_locked.nombre}. Disponible: {stock_anterior:g}, solicitado: {cantidad:g}.'
+                                })
+
+                        producto_locked.stock_actual = stock_resultante
+
+                        producto_locked.save(update_fields=['stock_actual'])
+
+                        costo_unitario = float(item.get('costo_unitario') or producto_locked.costo_promedio or 0)
+
+                        ItemVenta.objects.create(
+                            venta=instance,
+                            producto=producto_locked,
+                            descripcion=item.get('descripcion') or '',
+                            cantidad=cantidad,
+                            precio_unitario=precio_unitario,
+                            costo_unitario=costo_unitario,
+                            subtotal=cantidad * precio_unitario,
+                            utilidad=cantidad * (precio_unitario - costo_unitario),
+                            tipo_pago=item.get('tipo_pago') or 'EFECTIVO',
                         )
+
+                        _registrar_kardex(
+                            instance.empresa,
+                            producto_locked,
+                            instance.sucursal,
+                            'VENTA',
+                            cantidad,
+                            costo_unitario,
+                            stock_anterior,
+                            stock_resultante,
+                            f'Venta #{instance.id}',
+                            instance.usuario,
+                        )
+                    else:
+                        # Si está anulada, no ajustamos stock.
+                        costo_unitario = float(item.get('costo_unitario') or 0)
+                        ItemVenta.objects.create(
+                            venta=instance,
+                            producto=producto,
+                            descripcion=item.get('descripcion') or '',
+                            cantidad=cantidad,
+                            precio_unitario=precio_unitario,
+                            costo_unitario=costo_unitario,
+                            subtotal=cantidad * precio_unitario,
+                            utilidad=cantidad * (precio_unitario - costo_unitario),
+                            tipo_pago=item.get('tipo_pago') or 'EFECTIVO',
+                        )
+
+
+
                 subtotal, utilidad_total = self._totals_from_items(items_data)
+
             else:
                 subtotal = sum(item.subtotal for item in instance.items.all())
                 utilidad_total = sum(item.utilidad for item in instance.items.all())
@@ -535,10 +716,16 @@ class VentaWriteSerializer(serializers.ModelSerializer):
                 setattr(instance, field, value)
             instance.save()
             delta_saldo = float(instance.saldo_pendiente or 0) - old_saldo
-            if abs(delta_saldo) > 0.01 and instance.cliente_nombre != 'Consumidor final':
-                instance.cliente.saldo_actual = float(instance.cliente.saldo_actual or 0) + delta_saldo
-                instance.cliente.save(update_fields=['saldo_actual'])
+            if abs(delta_saldo) > 0.01:
+                es_consumidor_final = not (instance.cliente_documento or '').strip() and (
+                    (instance.cliente_nombre or '').strip().lower() == 'consumidor final' or not (instance.cliente_nombre or '').strip()
+                )
+                if not es_consumidor_final:
+                    instance.cliente.saldo_actual = float(instance.cliente.saldo_actual or 0) + delta_saldo
+                    instance.cliente.save(update_fields=['saldo_actual'])
+
         return instance
+
 
 
 class VentaReadSerializer(serializers.ModelSerializer):
