@@ -25,4 +25,3 @@ class UsuarioAdmin(admin.ModelAdmin):
     search_fields = ("username", "correo", "cedula", "empresa__nombre", "rol__nombre", "sucursal__nombre")
     list_filter = ("activo", "empresa", "rol", "sucursal")
     autocomplete_fields = ("empresa", "sucursal", "rol")
-

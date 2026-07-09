@@ -1,6 +1,8 @@
 import { getAccessToken, setAccessToken } from '../contexts/AuthContext';
 import { authService } from '../services/authService';
-import { ApiHttpError, buildApiErrorMessage } from './httpError';
+import { ApiHttpError, buildApiErrorMessage, isLicenseErrorData, licenseErrorMessage } from './httpError';
+import Swal from 'sweetalert2';
+
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL as string;
 
@@ -66,6 +68,30 @@ async function request<T>(method: Method, path: string, body?: unknown): Promise
 
   if (!response.ok) {
     const err = await response.json().catch(() => null) as Record<string, unknown> | null;
+
+    // Licencia vencida/inhabilitada (señal para cerrar sesión + mostrar alerta)
+    if (response.status === 403 && isLicenseErrorData(err)) {
+      const statusValue = typeof (err as Record<string, unknown>)?.status === 'string'
+        ? String((err as Record<string, unknown>).status)
+        : String((err as Record<string, unknown>)?.status ?? '');
+
+      const fv = (err as Record<string, unknown>)?.fecha_vencimiento;
+      const exp = typeof fv === 'string' ? fv : null;
+      const expText = exp
+        ? `\nFecha de vencimiento: ${new Date(exp).toLocaleString('es-CO', { dateStyle: 'short', timeStyle: 'short' })}`
+        : '';
+
+      await Swal.fire({
+        icon: 'warning',
+        title: 'Licencia no activa',
+        text: `${licenseErrorMessage(statusValue)}${expText}`,
+        confirmButtonText: 'Entendido',
+      });
+
+      setAccessToken(null);
+      window.location.href = '/login';
+    }
+
     throw new ApiHttpError(response.status, buildApiErrorMessage(response.status, err), err);
   }
 

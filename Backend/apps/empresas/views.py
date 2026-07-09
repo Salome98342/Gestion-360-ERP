@@ -2,6 +2,7 @@ from rest_framework import viewsets
 
 from apps.mixins import EmpresaScopedViewSetMixin
 from apps.usuarios.permissions import RolPermission
+from .permissions import LicenciaPermission
 from .models import Empresa, LicenciaToken, RenovacionLicencia, EventoEmpresa
 from .serializers import (
     EmpresaSerializer,
@@ -13,7 +14,7 @@ from .serializers import (
 
 class EmpresaViewSet(EmpresaScopedViewSetMixin, viewsets.ModelViewSet):
     modulo             = 'empresas'
-    permission_classes = [RolPermission]
+    permission_classes = [RolPermission, LicenciaPermission]
     queryset           = Empresa.objects.all()
     serializer_class   = EmpresaSerializer
     empresa_filter_path = 'id'
@@ -21,14 +22,14 @@ class EmpresaViewSet(EmpresaScopedViewSetMixin, viewsets.ModelViewSet):
 
 class LicenciaTokenViewSet(EmpresaScopedViewSetMixin, viewsets.ModelViewSet):
     modulo             = 'empresas'
-    permission_classes = [RolPermission]
+    permission_classes = [RolPermission, LicenciaPermission]
     queryset           = LicenciaToken.objects.all()
     serializer_class   = LicenciaTokenSerializer
 
 
 class RenovacionLicenciaViewSet(EmpresaScopedViewSetMixin, viewsets.ModelViewSet):
     modulo             = 'empresas'
-    permission_classes = [RolPermission]
+    permission_classes = [RolPermission, LicenciaPermission]
     queryset           = RenovacionLicencia.objects.all()
     serializer_class   = RenovacionLicenciaSerializer
     empresa_filter_path = 'licencia__empresa_id'
@@ -36,7 +37,7 @@ class RenovacionLicenciaViewSet(EmpresaScopedViewSetMixin, viewsets.ModelViewSet
 
 class EventoEmpresaViewSet(EmpresaScopedViewSetMixin, viewsets.ModelViewSet):
     modulo             = 'reportes'
-    permission_classes = [RolPermission]
+    permission_classes = [RolPermission, LicenciaPermission]
     queryset           = EventoEmpresa.objects.all()
     serializer_class   = EventoEmpresaSerializer
 

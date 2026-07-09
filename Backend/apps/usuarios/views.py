@@ -1,5 +1,4 @@
 from django.conf import settings
-from django.contrib.auth.hashers import check_password, make_password
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.permissions import AllowAny
@@ -48,7 +47,7 @@ class UsuarioViewSet(EmpresaScopedViewSetMixin, viewsets.ModelViewSet):
     def toggle_activo(self, request, pk=None):
         """Activa o desactiva el perfil del usuario."""
         usuario = self.get_object()
-        usuario.activo = 0 if usuario.activo else 1
+        usuario.activo = not usuario.activo # Ajustado a booleano
         usuario.save(update_fields=['activo'])
         return Response({'id': usuario.id, 'activo': usuario.activo})
 
@@ -62,7 +61,7 @@ class UsuarioViewSet(EmpresaScopedViewSetMixin, viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
         usuario = self.get_object()
-        usuario.password = make_password(password)
+        usuario.set_password(password) # Usa el método nativo
         usuario.save(update_fields=['password'])
         return Response({'message': 'Contraseña actualizada correctamente.'})
 
@@ -77,7 +76,7 @@ def _build_tokens(user: Usuario) -> RefreshToken:
     refresh['nombre']      = user.nombre
     refresh['rol_id']      = user.rol_id
     refresh['rol_nombre']  = user.rol.nombre
-    refresh['permisos']    = user.rol.permisos or ''
+    refresh['permisos']    = user.rol.permisos or {} # Ahora es un dict de JSONField
     refresh['empresa_id']  = user.empresa_id
     refresh['sucursal_id'] = user.sucursal_id
     return refresh
@@ -89,12 +88,9 @@ def _set_refresh_cookie(response: Response, token: str) -> None:
         key='refresh_token',
         value=token,
         httponly=True,
-        secure=not settings.DEBUG,  # Solo HTTPS en producción
-        # Para SPA (Frontend en otro origen/puerto) usamos Lax para permitir cookies en navegación.
-        # Strict puede impedir el envío del refresh_token y romper el flujo de sesión.
+        secure=not settings.DEBUG,
         samesite='Lax',
-
-        max_age=60 * 60 * 24 * 7,  # 7 días
+        max_age=60 * 60 * 24 * 7,
         path='/auth/',
     )
 
@@ -124,21 +120,26 @@ class LoginView(APIView):
             user = (
                 Usuario.objects
                 .select_related('rol', 'empresa', 'sucursal')
-                .get(username=username, activo=1)
+                .get(username=username, activo=True) # Ajustado a booleano
             )
         except Usuario.DoesNotExist:
-            # Respuesta genérica para evitar enumeración de usuarios
             return Response(
                 {'error': 'Credenciales inválidas.'},
                 status=status.HTTP_401_UNAUTHORIZED,
             )
 
-        # Soporta passwords hasheados con Django Y texto plano (migración)
-        stored = user.password or ''
-        if stored.startswith(('pbkdf2_', 'bcrypt$', 'argon2')):
-            password_ok = check_password(password, stored)
+        # Validación segura con fallback y actualización automática de texto plano
+        if user.check_password(password):
+            password_ok = True
         else:
-            password_ok = (password == stored)
+            stored = user.password or ''
+            if stored and not stored.startswith(('pbkdf2_', 'bcrypt$', 'argon2')) and password == stored:
+                password_ok = True
+                # Parche de seguridad: re-hash inmediato para no guardar texto plano
+                user.set_password(password)
+                user.save(update_fields=['password'])
+            else:
+                password_ok = False
 
         if not password_ok:
             return Response(
@@ -208,7 +209,7 @@ class RefreshView(APIView):
             return response
 
         response = Response({'access': str(new_access)}, status=status.HTTP_200_OK)
-        _set_refresh_cookie(response, str(refresh))  # Rotación del refresh token
+        _set_refresh_cookie(response, str(refresh))
         return response
 
 
@@ -226,4 +227,3 @@ class LogoutView(APIView):
         )
         response.delete_cookie('refresh_token', path='/auth/')
         return response
-

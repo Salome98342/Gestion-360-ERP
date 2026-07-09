@@ -8,7 +8,7 @@ from .models import Usuario
 class UsuarioJWTAuthentication(JWTAuthentication):
     """
     Autenticación JWT que resuelve el usuario desde el modelo Usuario
-    en lugar de Django auth.User (que no se usa en este proyecto).
+    personalizado de ERP en lugar de Django auth.User.
     """
 
     def get_user(self, validated_token):

@@ -33,7 +33,7 @@ DATABASES = {
         # Fuerza el schema para evitar que datos importados en otro schema
         # no sean visibles desde Django.
         'OPTIONS': {
-'options': '-c search_path=public'
+            'options': '-c search_path=public'
         },
     }
 }
@@ -67,6 +67,7 @@ INSTALLED_APPS = [
     'rest_framework',
     'corsheaders',
     'rest_framework_simplejwt',
+    'django_filters', # <-- Agregado para el correcto funcionamiento de los filtros
     'apps.empresas.apps.EmpresasConfig',
     'apps.usuarios.apps.UsuariosConfig',
     'apps.inventario.apps.InventarioConfig',
@@ -103,9 +104,6 @@ TEMPLATES = [
 ]
 
 WSGI_APPLICATION = 'core.wsgi.application'
-
-
-
 
 
 # Password validation

@@ -18,7 +18,9 @@ export function can(
   const raw = user.rol.permisos;
 
   // Rol sin permisos configurados → acceso completo (estado admin inicial)
-  if (!raw || raw.trim() === '') return true;
+  if (raw == null) return true;
+  if (typeof raw !== 'string') return true; // si viene como objeto/dict, ya no intentamos trim
+  if (raw.trim() === '') return true;
 
   try {
     const perms = JSON.parse(raw) as Record<string, Record<string, boolean>>;

@@ -15,13 +15,12 @@ _ACTION_MAP = {
 
 
 class RolPermission(BasePermission):
-    """Permisos por rol (JSON) para cada módulo/acción solicitada.
+    """Permisos por rol (JSONField nativo) para cada módulo/acción solicitada.
 
     Uso: definir `modulo = 'ventas'` en el ViewSet.
 
     Reglas:
       - Si `rol.permisos` es NULL/vacío => acceso completo.
-      - Si `rol.permisos` es JSON inválido o no tiene la estructura esperada => denegar.
       - Si existe el módulo pero no contiene la acción => denegar.
     """
 
@@ -56,21 +55,18 @@ class RolPermission(BasePermission):
 
         modulo = str(modulo).lower()
 
-        # Si permisos es NULL o vacío => acceso completo
-        raw = user.rol.permisos
-        if raw is None:
+        perms = user.rol.permisos
+        
+        # Si permisos es NULL o dict vacío => acceso completo
+        if not perms:
             return True
-        if isinstance(raw, str) and raw.strip() == '':
-            return True
-
-        # En has_permission() algunos ViewSet aún no exponen `view.action`.
-        required = self._infer_required(request, view)
-
-        # Parseo estricto: cualquier estructura inválida => denegar
-        try:
-            perms = json.loads(raw)
-        except (json.JSONDecodeError, TypeError):
-            return False
+            
+        # Fallback de seguridad en caso de que quede algún string por migrar
+        if isinstance(perms, str):
+            try:
+                perms = json.loads(perms)
+            except (json.JSONDecodeError, TypeError):
+                return False
 
         if not isinstance(perms, dict):
             return False
@@ -79,6 +75,6 @@ class RolPermission(BasePermission):
         if not isinstance(module_entry, dict):
             return False
 
+        required = self._infer_required(request, view)
         allowed = module_entry.get(required, False)
         return bool(allowed)
-

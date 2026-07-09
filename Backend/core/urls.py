@@ -21,7 +21,6 @@ from rest_framework.routers import DefaultRouter
 from apps.empresas.views import EmpresaViewSet, LicenciaTokenViewSet, RenovacionLicenciaViewSet, EventoEmpresaViewSet
 from apps.usuarios.views import SucursalViewSet, RolViewSet, UsuarioViewSet, LoginView, RefreshView, LogoutView
 from apps.inventario.views import (
-
     CategoriaViewSet,
     TipoClienteViewSet,
     ClienteViewSet,
@@ -31,10 +30,8 @@ from apps.inventario.views import (
 )
 from apps.ventas.views import (
     CompraViewSet,
-    ItemCompraViewSet,
     PagoProveedorViewSet,
     VentaViewSet,
-    ItemVentaViewSet,
     AbonoViewSet,
     KardexViewSet,
     MovimientoCajaViewSet,
@@ -66,12 +63,9 @@ router.register(r'cajas', CajaViewSet)
 
 # Ventas / Compras / Movimientos
 router.register(r'compras', CompraViewSet, basename='compra')
-router.register(r'items-compras', ItemCompraViewSet)
 router.register(r'pagos-proveedores', PagoProveedorViewSet)
 router.register(r'ventas', VentaViewSet, basename='venta')
-router.register(r'items-ventas', ItemVentaViewSet)
 router.register(r'abonos', AbonoViewSet)
-
 router.register(r'kardex', KardexViewSet)
 router.register(r'movimiento-caja', MovimientoCajaViewSet)
 router.register(r'auditoria-descuento', AuditoriaDescuentoViewSet)
@@ -85,4 +79,3 @@ urlpatterns = [
     path('auth/refresh/', RefreshView.as_view(), name='auth-refresh'),
     path('auth/logout/',  LogoutView.as_view(),  name='auth-logout'),
 ]
-
