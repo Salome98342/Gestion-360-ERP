@@ -1,6 +1,4 @@
 import React, {
-  createContext,
-  useContext,
   useState,
   useCallback,
   useEffect,
@@ -8,11 +6,8 @@ import React, {
 } from 'react';
 import { authService } from '../services/authService';
 import type { AuthUser, LoginCredentials } from '../types/auth';
-
-// ── Access token en memoria — nunca en localStorage (seguro vs XSS) ──────────
-let _accessToken: string | null = null;
-export function getAccessToken(): string | null { return _accessToken; }
-export function setAccessToken(token: string | null) { _accessToken = token; }
+import { AuthContext } from './authContextInternal';
+import { getAccessToken, setAccessToken } from './authTokenStore';
 
 // ── Helpers JWT ──────────────────────────────────────────────────────────────
 function decodeJwt(token: string): Record<string, unknown> {
@@ -36,20 +31,6 @@ function jwtToUser(p: Record<string, unknown>): AuthUser {
   };
 }
 
-// ── Tipos del contexto ───────────────────────────────────────────────────────
-interface AuthContextValue {
-  user:            AuthUser | null;
-  isAuthenticated: boolean;
-  isInitializing:  boolean;   // true mientras se restaura la sesión al arrancar
-  isLoading:       boolean;   // true durante login / logout
-  error:           string | null;
-  login:      (creds: LoginCredentials) => Promise<void>;
-  logout:     () => Promise<void>;
-  clearError: () => void;
-}
-
-const AuthContext = createContext<AuthContextValue | null>(null);
-
 // ── Provider ─────────────────────────────────────────────────────────────────
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user,            setUser]            = useState<AuthUser | null>(null);
@@ -66,7 +47,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     authService
       .refresh()
       .then(({ access }) => {
-        _accessToken = access;
+        setAccessToken(access);
         setUser(jwtToUser(decodeJwt(access)));
         setIsAuthenticated(true);
       })
@@ -79,7 +60,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setError(null);
     try {
       const data = await authService.login(creds);
-      _accessToken = data.access;
+      setAccessToken(data.access);
       setUser(data.user);
       setIsAuthenticated(true);
     } catch (err) {
@@ -94,9 +75,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const logout = useCallback(async () => {
     setIsLoading(true);
     try {
-      if (_accessToken) await authService.logout(_accessToken);
+      const accessToken = getAccessToken();
+      if (accessToken) await authService.logout(accessToken);
     } finally {
-      _accessToken = null;
+      setAccessToken(null);
       setUser(null);
       setIsAuthenticated(false);
       setIsLoading(false);
@@ -111,11 +93,4 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       {children}
     </AuthContext.Provider>
   );
-}
-
-// ── Hook ─────────────────────────────────────────────────────────────────────
-export function useAuth(): AuthContextValue {
-  const ctx = useContext(AuthContext);
-  if (!ctx) throw new Error('useAuth debe usarse dentro de <AuthProvider>');
-  return ctx;
 }

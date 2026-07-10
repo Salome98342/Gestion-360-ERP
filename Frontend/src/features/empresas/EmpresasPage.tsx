@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Save } from 'lucide-react';
-import { useAuth } from '../../contexts/AuthContext';
+import { useAuth } from '../../hooks/useAuth';
 import { empresasService } from '../../services/empresasService';
 import { canEdit } from '../../utils/permissions';
 import { notifyError, notifySuccess } from '../../utils/notify';

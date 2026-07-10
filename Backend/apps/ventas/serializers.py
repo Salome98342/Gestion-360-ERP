@@ -1,3 +1,4 @@
+from decimal import Decimal, ROUND_HALF_UP
 from django.db import transaction
 from django.utils import timezone
 from rest_framework import serializers
@@ -18,16 +19,34 @@ from .models import (
 )
 
 
+ZERO = Decimal('0.00')
+CENT = Decimal('0.01')
+HUNDRED = Decimal('100.00')
+STOCK_EPSILON = Decimal('0.0001')
+
+
+def _to_decimal(value, default=ZERO):
+    if value in (None, ''):
+        return default
+    if isinstance(value, Decimal):
+        return value
+    return Decimal(str(value))
+
+
+def _money(value: Decimal) -> Decimal:
+    return _to_decimal(value).quantize(CENT, rounding=ROUND_HALF_UP)
+
+
 def _venta_estado(total, total_pagado, estado):
     if (estado or '').upper() == 'ANULADO':
         return 'ANULADO'
-    return 'PAGADO' if total - total_pagado <= 0.01 else 'CREDITO'
+    return 'PAGADO' if _to_decimal(total) - _to_decimal(total_pagado) <= CENT else 'CREDITO'
 
 
 def _estado_pago(total, total_pagado, estado):
     if (estado or '').upper() == 'ANULADO':
         return 'ANULADO'
-    return 'PAGADO' if total - total_pagado <= 0.01 else (estado or 'PENDIENTE')
+    return 'PAGADO' if _to_decimal(total) - _to_decimal(total_pagado) <= CENT else (estado or 'PENDIENTE')
 
 
 def _registrar_movimiento_caja(usuario, sucursal, tipo, monto, concepto, referencia):
@@ -135,14 +154,17 @@ class CompraSerializer(serializers.ModelSerializer):
             validated_data.setdefault('sucursal', request.user.sucursal)
         validated_data['fecha'] = timezone.now()
 
-        subtotal = sum(float(item['cantidad']) * float(item['costo_unitario']) for item in items_data)
-        impuesto = float(validated_data.get('impuesto') or 0)
-        total = subtotal + impuesto
-        total_pagado = float(validated_data.get('total_pagado') or 0)
+        subtotal = sum((_to_decimal(item['cantidad']) * _to_decimal(item['costo_unitario']) for item in items_data), ZERO)
+        impuesto = _money(validated_data.get('impuesto'))
+        subtotal = _money(subtotal)
+        total = _money(subtotal + impuesto)
+        total_pagado = _money(validated_data.get('total_pagado'))
         validated_data['subtotal'] = subtotal
+        validated_data['impuesto'] = impuesto
         validated_data['total'] = total
-        validated_data['saldo_pendiente'] = total - total_pagado
-        if total_pagado - total > 0.01:
+        validated_data['total_pagado'] = total_pagado
+        validated_data['saldo_pendiente'] = _money(total - total_pagado)
+        if total_pagado - total > CENT:
             raise serializers.ValidationError({'total_pagado': 'El pago no puede superar el total de la compra.'})
         validated_data['estado'] = _estado_pago(total, total_pagado, validated_data.get('estado'))
 
@@ -154,22 +176,22 @@ class CompraSerializer(serializers.ModelSerializer):
             )
             for item in items_data:
                 producto = Producto.objects.select_for_update().get(pk=item['producto'].pk)
-                cantidad = float(item['cantidad'])
-                costo_unitario = float(item['costo_unitario'])
-                stock_anterior = float(producto.stock_actual or 0)
-                stock_resultante = stock_anterior + cantidad
+                cantidad = _money(item['cantidad'])
+                costo_unitario = _money(item['costo_unitario'])
+                stock_anterior = _money(producto.stock_actual or ZERO)
+                stock_resultante = _money(stock_anterior + cantidad)
                 if stock_resultante < stock_anterior:
                     raise serializers.ValidationError({
                         'items': f'La compra no puede disminuir el stock de {producto.nombre}.'
                     })
-                if stock_resultante < 0:
+                if stock_resultante < ZERO:
                     raise serializers.ValidationError({
                         'items': f'El stock resultante de {producto.nombre} no puede ser negativo.'
                     })
-                costo_anterior = float(producto.costo_promedio or 0)
+                costo_anterior = _money(producto.costo_promedio or ZERO)
                 producto.costo_promedio = (
-                    costo_unitario if stock_resultante <= 0
-                    else ((stock_anterior * costo_anterior) + (cantidad * costo_unitario)) / stock_resultante
+                    costo_unitario if stock_resultante <= ZERO
+                    else _money(((stock_anterior * costo_anterior) + (cantidad * costo_unitario)) / stock_resultante)
                 )
                 producto.stock_actual = stock_resultante
                 producto.save(update_fields=['costo_promedio', 'stock_actual'])
@@ -179,7 +201,7 @@ class CompraSerializer(serializers.ModelSerializer):
                     producto=producto,
                     cantidad=cantidad,
                     costo_unitario=costo_unitario,
-                    subtotal=cantidad * costo_unitario,
+                    subtotal=_money(cantidad * costo_unitario),
                 )
                 _registrar_kardex(
                     compra.empresa, producto, compra.sucursal, 'COMPRA', cantidad, costo_unitario,
@@ -237,16 +259,16 @@ class PagoProveedorSerializer(serializers.ModelSerializer):
         validated_data['fecha'] = timezone.now()
         if request and getattr(request, 'user', None):
             validated_data['usuario'] = request.user
-        valor = float(validated_data['valor'])
+        valor = _money(validated_data['valor'])
         with transaction.atomic():
             compra = Compra.objects.select_for_update().get(pk=validated_data['compra'].pk)
-            if valor <= 0:
+            if valor <= ZERO:
                 raise serializers.ValidationError({'valor': 'El pago debe ser mayor que cero.'})
-            if valor - float(compra.saldo_pendiente or 0) > 0.01:
+            if valor - _money(compra.saldo_pendiente or ZERO) > CENT:
                 raise serializers.ValidationError({'valor': 'El pago no puede superar el saldo pendiente.'})
             pago = super().create(validated_data)
-            compra.total_pagado = float(compra.total_pagado or 0) + valor
-            compra.saldo_pendiente = max(0, float(compra.total or 0) - compra.total_pagado)
+            compra.total_pagado = _money(_to_decimal(compra.total_pagado) + valor)
+            compra.saldo_pendiente = max(ZERO, _money(_to_decimal(compra.total) - compra.total_pagado))
             compra.estado = _estado_pago(compra.total, compra.total_pagado, compra.estado)
             compra.save(update_fields=['total_pagado', 'saldo_pendiente', 'estado'])
             _registrar_movimiento_caja(
@@ -324,14 +346,14 @@ class VentaWriteSerializer(serializers.ModelSerializer):
                 consolidado[producto_id] = {
                     'producto': producto,
                     'descripcion': item.get('descripcion') or '',
-                    'cantidad': 0.0,
-                    'precio_unitario': float(item.get('precio_unitario') or 0),
-                    'costo_unitario': float(item.get('costo_unitario') or 0) if item.get('costo_unitario') is not None else None,
+                    'cantidad': ZERO,
+                    'precio_unitario': _money(item.get('precio_unitario')),
+                    'costo_unitario': _money(item.get('costo_unitario')) if item.get('costo_unitario') is not None else None,
                     'utilidad_hint': None,
                     'tipo_pago': item.get('tipo_pago') or 'EFECTIVO',
                 }
                 orden.append(producto_id)
-            consolidado[producto_id]['cantidad'] += float(item['cantidad'])
+            consolidado[producto_id]['cantidad'] = _money(consolidado[producto_id]['cantidad'] + _to_decimal(item['cantidad']))
 
         # Para efectos contables, para productos consolidados tomamos el primer precio/costo unitario
         # (si el front manda distintos precios por la misma referencia, eso ya es inconsistente).
@@ -404,11 +426,11 @@ class VentaWriteSerializer(serializers.ModelSerializer):
         for item in items_data:
             producto = item.get('producto')
             if producto is not None:
-                requested[producto.id] = requested.get(producto.id, 0) + float(item['cantidad'])
+                requested[producto.id] = _money(requested.get(producto.id, ZERO) + _to_decimal(item['cantidad']))
 
         for item in existing_items or []:
             if getattr(item, 'producto_id', None):
-                restored[item.producto_id] = restored.get(item.producto_id, 0) + float(item.cantidad)
+                restored[item.producto_id] = _money(restored.get(item.producto_id, ZERO) + _to_decimal(item.cantidad))
 
         # Lock por producto para evitar race conditions.
         producto_ids = list(requested.keys())
@@ -420,7 +442,7 @@ class VentaWriteSerializer(serializers.ModelSerializer):
             if not producto:
                 raise serializers.ValidationError({'items': 'Producto no encontrado.'})
 
-            disponible = float(producto.stock_actual or 0) + restored.get(producto_id, 0)
+            disponible = _money(_to_decimal(producto.stock_actual) + restored.get(producto_id, ZERO))
             if cantidad > disponible:
                 raise serializers.ValidationError({
                     'items': f'Stock insuficiente para {producto.nombre}. Disponible: {disponible:g}.'
@@ -430,40 +452,42 @@ class VentaWriteSerializer(serializers.ModelSerializer):
 
 
     def _totals_from_items(self, items_data):
-        subtotal = 0.0
-        utilidad_total = 0.0
+        subtotal = ZERO
+        utilidad_total = ZERO
         for item in items_data:
-            cantidad = float(item['cantidad'])
-            precio_unitario = float(item['precio_unitario'])
-            costo_unitario = float(item.get('costo_unitario') or 0)
+            cantidad = _to_decimal(item['cantidad'])
+            precio_unitario = _money(item['precio_unitario'])
+            costo_unitario = _money(item.get('costo_unitario'))
             subtotal += cantidad * precio_unitario
             utilidad_total += cantidad * (precio_unitario - costo_unitario)
-        return subtotal, utilidad_total
+        return _money(subtotal), _money(utilidad_total)
 
     def _apply_totals(self, data, subtotal, utilidad_total):
-        descuento_porcentaje = float(data.get('descuento_porcentaje') or 0)
-        descuento_valor = subtotal * descuento_porcentaje / 100
-        subtotal_con_descuento = subtotal - descuento_valor
+        descuento_porcentaje = _money(data.get('descuento_porcentaje'))
+        descuento_valor = _money(subtotal * descuento_porcentaje / HUNDRED)
+        subtotal_con_descuento = _money(subtotal - descuento_valor)
 
-        porcentaje_impuesto = float(data.get('porcentaje_impuesto') or 0)
-        valor_impuesto = subtotal_con_descuento * porcentaje_impuesto / 100
-        total = subtotal_con_descuento + valor_impuesto
+        porcentaje_impuesto = _money(data.get('porcentaje_impuesto'))
+        valor_impuesto = _money(subtotal_con_descuento * porcentaje_impuesto / HUNDRED)
+        total = _money(subtotal_con_descuento + valor_impuesto)
 
-        total_pagado = min(float(data.get('total_pagado') or 0), total)
-        saldo_pendiente = total - total_pagado
+        total_pagado = min(_money(data.get('total_pagado')), total)
+        saldo_pendiente = _money(total - total_pagado)
         metodo_pago = (data.get('metodo_pago') or 'EFECTIVO').upper()
-        monto_recibido = float(data.get('monto_recibido') or 0)
+        monto_recibido = _money(data.get('monto_recibido'))
         if (data.get('estado') or '').upper() == 'ANULADO':
-            total_pagado = 0
-            saldo_pendiente = 0
-            monto_recibido = 0
-        if monto_recibido <= 0 and total_pagado > 0:
+            total_pagado = ZERO
+            saldo_pendiente = ZERO
+            monto_recibido = ZERO
+        if monto_recibido <= ZERO and total_pagado > ZERO:
             monto_recibido = total_pagado
-        cambio = max(0, monto_recibido - total) if metodo_pago == 'EFECTIVO' else 0
+        cambio = max(ZERO, _money(monto_recibido - total)) if metodo_pago == 'EFECTIVO' else ZERO
 
         data['subtotal'] = subtotal
+        data['descuento_porcentaje'] = descuento_porcentaje
         data['descuento_valor'] = descuento_valor
         data['subtotal_con_descuento'] = subtotal_con_descuento
+        data['porcentaje_impuesto'] = porcentaje_impuesto
         data['valor_impuesto'] = valor_impuesto
         data['total'] = total
         data['total_pagado'] = total_pagado
@@ -484,7 +508,7 @@ class VentaWriteSerializer(serializers.ModelSerializer):
 
         subtotal, utilidad_total = self._totals_from_items(items_data)
         self._apply_totals(validated_data, subtotal, utilidad_total)
-        if float(validated_data['total_pagado'] or 0) - float(validated_data['total'] or 0) > 0.01:
+        if _to_decimal(validated_data['total_pagado']) - _to_decimal(validated_data['total']) > CENT:
             raise serializers.ValidationError({'total_pagado': 'El pago no puede superar el total de la venta.'})
 
         # Consolida por producto para que validación y aplicación usen exactamente los mismos totales.
@@ -515,7 +539,7 @@ class VentaWriteSerializer(serializers.ModelSerializer):
                     (venta.cliente_nombre or '').strip().lower() == 'consumidor final' or not (venta.cliente_nombre or '').strip()
                 )
                 if not es_consumidor_final:
-                    venta.cliente.saldo_actual = float(venta.cliente.saldo_actual or 0) + venta.saldo_pendiente
+                    venta.cliente.saldo_actual = _money(_to_decimal(venta.cliente.saldo_actual) + _to_decimal(venta.saldo_pendiente))
                     venta.cliente.save(update_fields=['saldo_actual'])
 
 
@@ -523,27 +547,27 @@ class VentaWriteSerializer(serializers.ModelSerializer):
                 venta.usuario,
                 venta.sucursal,
                 'INGRESO',
-                float(venta.total_pagado or 0),
+                _money(venta.total_pagado or ZERO),
                 'Pago inicial de venta',
                 f'Venta #{venta.id}',
             )
 
             for item in items_data:
-                cantidad = float(item['cantidad'])
-                precio_unitario = float(item['precio_unitario'])
+                cantidad = _money(item['cantidad'])
+                precio_unitario = _money(item['precio_unitario'])
                 producto = item.get('producto')
 
                 producto_locked = producto_map.get(producto.id)
                 if not producto_locked:
                     raise serializers.ValidationError({'items': 'Producto no encontrado.'})
 
-                stock_anterior = float(producto_locked.stock_actual or 0)
-                stock_resultante = stock_anterior - cantidad
+                stock_anterior = _money(producto_locked.stock_actual or ZERO)
+                stock_resultante = _money(stock_anterior - cantidad)
 
                 # Asegura que no quede negativo por errores de precisión.
-                if stock_resultante < 0:
-                    if stock_resultante > -0.0001:
-                        stock_resultante = 0
+                if stock_resultante < ZERO:
+                    if stock_resultante > -STOCK_EPSILON:
+                        stock_resultante = ZERO
                     else:
                         raise serializers.ValidationError({
                             'items': f'Stock insuficiente en {producto_locked.nombre}. Disponible: {stock_anterior:g}, solicitado: {cantidad:g}.'
@@ -554,7 +578,7 @@ class VentaWriteSerializer(serializers.ModelSerializer):
                 producto_locked.save(update_fields=['stock_actual'])
 
 
-                costo_unitario = float(item.get('costo_unitario') or producto_locked.costo_promedio or 0)
+                costo_unitario = _money(item.get('costo_unitario') or producto_locked.costo_promedio or ZERO)
 
                 ItemVenta.objects.create(
                     venta=venta,
@@ -563,8 +587,8 @@ class VentaWriteSerializer(serializers.ModelSerializer):
                     cantidad=cantidad,
                     precio_unitario=precio_unitario,
                     costo_unitario=costo_unitario,
-                    subtotal=cantidad * precio_unitario,
-                    utilidad=cantidad * (precio_unitario - costo_unitario),
+                    subtotal=_money(cantidad * precio_unitario),
+                    utilidad=_money(cantidad * (precio_unitario - costo_unitario)),
                     tipo_pago=item.get('tipo_pago') or 'EFECTIVO',
                 )
 
@@ -587,7 +611,7 @@ class VentaWriteSerializer(serializers.ModelSerializer):
 
     def update(self, instance, validated_data):
         items_data = validated_data.pop('items', None)
-        old_saldo = float(instance.saldo_pendiente or 0)
+        old_saldo = _money(instance.saldo_pendiente or ZERO)
 
         for field, value in validated_data.items():
             setattr(instance, field, value)
@@ -620,8 +644,8 @@ class VentaWriteSerializer(serializers.ModelSerializer):
                             if not producto_locked:
                                 producto_locked = Producto.objects.select_for_update().get(pk=old_item.producto_id)
 
-                            stock_anterior = float(producto_locked.stock_actual or 0)
-                            stock_resultante = stock_anterior + float(old_item.cantidad)
+                            stock_anterior = _money(producto_locked.stock_actual or ZERO)
+                            stock_resultante = _money(stock_anterior + _to_decimal(old_item.cantidad))
                             producto_locked.stock_actual = stock_resultante
                             producto_locked.save(update_fields=['stock_actual'])
 
@@ -630,8 +654,8 @@ class VentaWriteSerializer(serializers.ModelSerializer):
                                 producto_locked,
                                 instance.sucursal,
                                 'AJUSTE_VENTA',
-                                float(old_item.cantidad),
-                                float(old_item.costo_unitario or 0),
+                                _money(old_item.cantidad),
+                                _money(old_item.costo_unitario or ZERO),
                                 stock_anterior,
                                 stock_resultante,
                                 f'Ajuste venta #{instance.id}',
@@ -644,20 +668,20 @@ class VentaWriteSerializer(serializers.ModelSerializer):
                 items_data = self._consolidar_items_por_producto(items_data)
 
                 for item in items_data:
-                    cantidad = float(item['cantidad'])
-                    precio_unitario = float(item['precio_unitario'])
+                    cantidad = _money(item['cantidad'])
+                    precio_unitario = _money(item['precio_unitario'])
                     producto = item.get('producto')
 
                     producto_locked = producto_map.get(producto.id) if producto_map else None
 
                     if producto_locked is not None and not is_annulled:
-                        stock_anterior = float(producto_locked.stock_actual or 0)
-                        stock_resultante = stock_anterior - cantidad
+                        stock_anterior = _money(producto_locked.stock_actual or ZERO)
+                        stock_resultante = _money(stock_anterior - cantidad)
 
                         # Asegura que no quede negativo por errores de precisión.
-                        if stock_resultante < 0:
-                            if stock_resultante > -0.0001:
-                                stock_resultante = 0
+                        if stock_resultante < ZERO:
+                            if stock_resultante > -STOCK_EPSILON:
+                                stock_resultante = ZERO
                             else:
                                 raise serializers.ValidationError({
                                     'items': f'Stock insuficiente en {producto_locked.nombre}. Disponible: {stock_anterior:g}, solicitado: {cantidad:g}.'
@@ -667,7 +691,7 @@ class VentaWriteSerializer(serializers.ModelSerializer):
 
                         producto_locked.save(update_fields=['stock_actual'])
 
-                        costo_unitario = float(item.get('costo_unitario') or producto_locked.costo_promedio or 0)
+                        costo_unitario = _money(item.get('costo_unitario') or producto_locked.costo_promedio or ZERO)
 
                         ItemVenta.objects.create(
                             venta=instance,
@@ -676,8 +700,8 @@ class VentaWriteSerializer(serializers.ModelSerializer):
                             cantidad=cantidad,
                             precio_unitario=precio_unitario,
                             costo_unitario=costo_unitario,
-                            subtotal=cantidad * precio_unitario,
-                            utilidad=cantidad * (precio_unitario - costo_unitario),
+                            subtotal=_money(cantidad * precio_unitario),
+                            utilidad=_money(cantidad * (precio_unitario - costo_unitario)),
                             tipo_pago=item.get('tipo_pago') or 'EFECTIVO',
                         )
 
@@ -695,7 +719,7 @@ class VentaWriteSerializer(serializers.ModelSerializer):
                         )
                     else:
                         # Si está anulada, no ajustamos stock.
-                        costo_unitario = float(item.get('costo_unitario') or 0)
+                        costo_unitario = _money(item.get('costo_unitario') or ZERO)
                         ItemVenta.objects.create(
                             venta=instance,
                             producto=producto,
@@ -703,8 +727,8 @@ class VentaWriteSerializer(serializers.ModelSerializer):
                             cantidad=cantidad,
                             precio_unitario=precio_unitario,
                             costo_unitario=costo_unitario,
-                            subtotal=cantidad * precio_unitario,
-                            utilidad=cantidad * (precio_unitario - costo_unitario),
+                            subtotal=_money(cantidad * precio_unitario),
+                            utilidad=_money(cantidad * (precio_unitario - costo_unitario)),
                             tipo_pago=item.get('tipo_pago') or 'EFECTIVO',
                         )
 
@@ -713,8 +737,8 @@ class VentaWriteSerializer(serializers.ModelSerializer):
                 subtotal, utilidad_total = self._totals_from_items(items_data)
 
             else:
-                subtotal = sum(item.subtotal for item in instance.items.all())
-                utilidad_total = sum(item.utilidad for item in instance.items.all())
+                subtotal = _money(sum((_to_decimal(item.subtotal) for item in instance.items.all()), ZERO))
+                utilidad_total = _money(sum((_to_decimal(item.utilidad) for item in instance.items.all()), ZERO))
 
             data = {
                 'descuento_porcentaje': instance.descuento_porcentaje,
@@ -725,19 +749,19 @@ class VentaWriteSerializer(serializers.ModelSerializer):
                 'estado': instance.estado,
             }
             self._apply_totals(data, subtotal, utilidad_total)
-            if float(data['total_pagado'] or 0) - float(data['total'] or 0) > 0.01:
+            if _to_decimal(data['total_pagado']) - _to_decimal(data['total']) > CENT:
                 raise serializers.ValidationError({'total_pagado': 'El pago no puede superar el total de la venta.'})
             data['estado'] = _venta_estado(data['total'], data['total_pagado'], instance.estado)
             for field, value in data.items():
                 setattr(instance, field, value)
             instance.save()
-            delta_saldo = float(instance.saldo_pendiente or 0) - old_saldo
-            if abs(delta_saldo) > 0.01:
+            delta_saldo = _money(_to_decimal(instance.saldo_pendiente) - old_saldo)
+            if abs(delta_saldo) > CENT:
                 es_consumidor_final = not (instance.cliente_documento or '').strip() and (
                     (instance.cliente_nombre or '').strip().lower() == 'consumidor final' or not (instance.cliente_nombre or '').strip()
                 )
                 if not es_consumidor_final:
-                    instance.cliente.saldo_actual = float(instance.cliente.saldo_actual or 0) + delta_saldo
+                    instance.cliente.saldo_actual = _money(_to_decimal(instance.cliente.saldo_actual) + delta_saldo)
                     instance.cliente.save(update_fields=['saldo_actual'])
 
         return instance
@@ -797,19 +821,19 @@ class AbonoSerializer(serializers.ModelSerializer):
         validated_data['fecha'] = timezone.now()
         if request and getattr(request, 'user', None):
             validated_data['usuario'] = request.user
-        valor = float(validated_data['valor'])
+        valor = _money(validated_data['valor'])
         with transaction.atomic():
             venta = Venta.objects.select_for_update().select_related('cliente').get(pk=validated_data['venta'].pk)
-            if valor <= 0:
+            if valor <= ZERO:
                 raise serializers.ValidationError({'valor': 'El abono debe ser mayor que cero.'})
-            if valor - float(venta.saldo_pendiente or 0) > 0.01:
+            if valor - _money(venta.saldo_pendiente or ZERO) > CENT:
                 raise serializers.ValidationError({'valor': 'El abono no puede superar el saldo pendiente.'})
             abono = super().create(validated_data)
-            venta.total_pagado = float(venta.total_pagado or 0) + valor
-            venta.saldo_pendiente = max(0, float(venta.total or 0) - venta.total_pagado)
-            venta.estado = 'PAGADO' if venta.saldo_pendiente <= 0.01 else venta.estado
+            venta.total_pagado = _money(_to_decimal(venta.total_pagado) + valor)
+            venta.saldo_pendiente = max(ZERO, _money(_to_decimal(venta.total) - venta.total_pagado))
+            venta.estado = 'PAGADO' if venta.saldo_pendiente <= CENT else venta.estado
             venta.save(update_fields=['total_pagado', 'saldo_pendiente', 'estado'])
-            venta.cliente.saldo_actual = max(0, float(venta.cliente.saldo_actual or 0) - valor)
+            venta.cliente.saldo_actual = max(ZERO, _money(_to_decimal(venta.cliente.saldo_actual) - valor))
             venta.cliente.save(update_fields=['saldo_actual'])
             _registrar_movimiento_caja(
                 validated_data['usuario'], venta.sucursal, 'INGRESO', valor,

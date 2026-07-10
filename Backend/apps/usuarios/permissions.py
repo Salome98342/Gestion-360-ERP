@@ -14,9 +14,32 @@ _ACTION_MAP = {
 }
 
 
+def _parse_permissions(raw_permissions):
+    if isinstance(raw_permissions, dict):
+        return raw_permissions
+
+    if isinstance(raw_permissions, str):
+        raw_permissions = raw_permissions.strip()
+        if not raw_permissions:
+            return None
+        try:
+            parsed = json.loads(raw_permissions)
+        except (json.JSONDecodeError, TypeError):
+            return None
+        return parsed if isinstance(parsed, dict) else None
+
+    return None
+
+
 def is_admin_user(user) -> bool:
     """Determina si el usuario debe tratarse como administrador del tenant."""
-    if not user or not hasattr(user, 'rol') or user.rol is None:
+    if not user:
+        return False
+
+    if getattr(user, 'is_superuser', False):
+        return True
+
+    if not hasattr(user, 'rol') or user.rol is None:
         return False
 
     rol = user.rol
@@ -24,23 +47,15 @@ def is_admin_user(user) -> bool:
     if 'admin' in rol_nombre:
         return True
 
-    perms = getattr(rol, 'permisos', None)
-    if perms in (None, '', {}, []):
-        return True
-
+    perms = _parse_permissions(getattr(rol, 'permisos', None))
     if isinstance(perms, dict):
         return bool(perms.get('__admin__', False))
 
-    if isinstance(perms, str):
-        txt = perms.strip().lower()
+    raw_perms = getattr(rol, 'permisos', None)
+    if isinstance(raw_perms, str):
+        txt = raw_perms.strip().lower()
         if txt in ('', 'all', '*', 'admin'):
-            return True
-        try:
-            data = json.loads(perms)
-            if isinstance(data, dict) and data.get('__admin__') is True:
-                return True
-        except (json.JSONDecodeError, TypeError):
-            return False
+            return txt in ('all', '*', 'admin')
 
     return False
 
@@ -57,9 +72,9 @@ class RolPermission(BasePermission):
 
     Uso: definir `modulo = 'ventas'` en el ViewSet.
 
-    Reglas:
-      - Si `rol.permisos` es NULL/vacío => acceso completo.
-      - Si existe el módulo pero no contiene la acción => denegar.
+        Reglas:
+            - Si `rol.permisos` es NULL/vacío => denegar.
+            - Solo `__admin__` o permisos explícitos habilitan acciones.
     """
 
     message = 'No tienes permiso para realizar esta acción.'
@@ -83,6 +98,9 @@ class RolPermission(BasePermission):
     def has_permission(self, request, view):
         user = request.user
 
+        if getattr(user, 'is_superuser', False):
+            return True
+
         # Sin usuario autenticado (o sin rol asignado) → denegar
         if not user or not hasattr(user, 'rol') or user.rol is None:
             return False
@@ -93,21 +111,12 @@ class RolPermission(BasePermission):
 
         modulo = str(modulo).lower()
 
-        perms = user.rol.permisos
-        
-        # Si permisos es NULL o dict vacío => acceso completo
-        if not perms:
-            return True
-            
-        # Fallback de seguridad en caso de que quede algún string por migrar
-        if isinstance(perms, str):
-            try:
-                perms = json.loads(perms)
-            except (json.JSONDecodeError, TypeError):
-                return False
-
+        perms = _parse_permissions(user.rol.permisos)
         if not isinstance(perms, dict):
             return False
+
+        if perms.get('__admin__') is True:
+            return True
 
         module_entry = perms.get(modulo)
         if not isinstance(module_entry, dict):

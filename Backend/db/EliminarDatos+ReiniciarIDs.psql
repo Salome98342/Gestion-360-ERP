@@ -1,0 +1,35 @@
+BEGIN;
+
+TRUNCATE TABLE
+    abono,
+    auditoria_descuento,
+    caja,
+    categoria,
+    cliente,
+    compra,
+    evento_empresa,
+    kardex,
+    licencia_token,
+    log_actividad,
+    movimiento_caja,
+    pago_proveedor,
+    producto,
+    proveedor,
+    renovacion_licencia,
+    rol,
+    secuencias,
+    sucursal,
+    tipo_cliente,
+    usuario,
+    venta,
+    item_compra,
+    item_venta,
+    django_admin_log,
+    django_session
+RESTART IDENTITY CASCADE;
+
+COMMIT;
+
+TRUNCATE TABLE
+    empresa
+RESTART IDENTITY CASCADE;

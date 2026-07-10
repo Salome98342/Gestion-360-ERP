@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Ban, Download, Pencil, Plus, Search, Trash2, X } from 'lucide-react';
-import { useAuth } from '../../contexts/AuthContext';
+import { useAuth } from '../../hooks/useAuth';
 import { canCreate, canEdit } from '../../utils/permissions';
 import { ventasService } from '../../services/ventasService';
 import { inventarioService } from '../../services/inventarioService';
@@ -105,7 +105,11 @@ export default function VentasPage() {
     }
   }, []);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    queueMicrotask(() => {
+      void load();
+    });
+  }, [load]);
 
   const productById = useMemo(() => {
     const map = new Map<number, Producto>();

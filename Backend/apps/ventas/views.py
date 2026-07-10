@@ -212,7 +212,7 @@ class VentaViewSet(EmpresaScopedViewSetMixin, viewsets.ModelViewSet):
 class ItemVentaViewSet(EmpresaScopedViewSetMixin, viewsets.ModelViewSet):
 
     modulo             = 'ventas'
-    permission_classes = [RolPermission]
+    permission_classes = [RolPermission, LicenciaPermission]
     queryset = ItemVenta.objects.all()
     serializer_class = ItemVentaSerializer
     empresa_filter_path = 'venta__empresa_id'

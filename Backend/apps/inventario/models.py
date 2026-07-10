@@ -94,6 +94,13 @@ class Caja(models.Model):
 
     class Meta:
         db_table = "caja"
+        constraints = [
+            models.UniqueConstraint(
+                fields=['empresa', 'sucursal', 'usuario'],
+                condition=models.Q(estado='ABIERTA'),
+                name='unique_open_caja_per_user_branch',
+            ),
+        ]
 
     empresa = models.ForeignKey(Empresa, on_delete=models.CASCADE, related_name='cajas')
     sucursal = models.ForeignKey(UsuarioSucursal, on_delete=models.CASCADE, related_name='cajas')

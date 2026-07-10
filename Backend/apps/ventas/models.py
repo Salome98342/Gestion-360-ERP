@@ -1,3 +1,4 @@
+from decimal import Decimal
 from django.db import models
 
 from apps.empresas.models import Empresa
@@ -16,12 +17,12 @@ class Compra(models.Model):
 
 
     fecha = models.DateTimeField()
-    subtotal = models.FloatField()
-    impuesto = models.FloatField(default=0)
-    total = models.FloatField()
+    subtotal = models.DecimalField(max_digits=12, decimal_places=2)
+    impuesto = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal('0.00'))
+    total = models.DecimalField(max_digits=12, decimal_places=2)
     estado = models.TextField()
-    total_pagado = models.FloatField(default=0)
-    saldo_pendiente = models.FloatField(default=0)
+    total_pagado = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal('0.00'))
+    saldo_pendiente = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal('0.00'))
 
     def __str__(self):
         return f'Compra #{self.id}'
@@ -32,9 +33,9 @@ class ItemCompra(models.Model):
         db_table = "item_compra"
     compra = models.ForeignKey(Compra, on_delete=models.CASCADE, related_name='items')
     producto = models.ForeignKey(Producto, on_delete=models.CASCADE, related_name='items_compras')
-    cantidad = models.FloatField()
-    costo_unitario = models.FloatField()
-    subtotal = models.FloatField()
+    cantidad = models.DecimalField(max_digits=12, decimal_places=2)
+    costo_unitario = models.DecimalField(max_digits=12, decimal_places=2)
+    subtotal = models.DecimalField(max_digits=12, decimal_places=2)
 
 
 class PagoProveedor(models.Model):
@@ -44,7 +45,7 @@ class PagoProveedor(models.Model):
     empresa = models.ForeignKey(Empresa, on_delete=models.CASCADE, related_name='pagos_proveedores')
     compra = models.ForeignKey(Compra, on_delete=models.CASCADE, related_name='pagos')
     fecha = models.DateTimeField()
-    valor = models.FloatField()
+    valor = models.DecimalField(max_digits=12, decimal_places=2)
     metodo_pago = models.TextField(null=True, blank=True)
     usuario = models.ForeignKey(Usuario, null=True, blank=True, on_delete=models.SET_NULL, related_name='pagos_proveedores')
 
@@ -62,21 +63,21 @@ class Venta(models.Model):
     cliente_nombre = models.TextField(null=True, blank=True)
     cliente_documento = models.TextField(null=True, blank=True)
     fecha = models.DateTimeField()
-    subtotal = models.FloatField()
-    descuento_porcentaje = models.FloatField(default=0)
-    descuento_valor = models.FloatField(default=0)
-    subtotal_con_descuento = models.FloatField()
-    porcentaje_impuesto = models.FloatField(default=0)
-    valor_impuesto = models.FloatField(default=0)
-    total = models.FloatField()
-    total_pagado = models.FloatField(default=0)
+    subtotal = models.DecimalField(max_digits=12, decimal_places=2)
+    descuento_porcentaje = models.DecimalField(max_digits=5, decimal_places=2, default=Decimal('0.00'))
+    descuento_valor = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal('0.00'))
+    subtotal_con_descuento = models.DecimalField(max_digits=12, decimal_places=2)
+    porcentaje_impuesto = models.DecimalField(max_digits=5, decimal_places=2, default=Decimal('0.00'))
+    valor_impuesto = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal('0.00'))
+    total = models.DecimalField(max_digits=12, decimal_places=2)
+    total_pagado = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal('0.00'))
     metodo_pago = models.TextField(default='EFECTIVO')
-    monto_recibido = models.FloatField(default=0)
-    cambio = models.FloatField(default=0)
-    saldo_pendiente = models.FloatField(default=0)
+    monto_recibido = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal('0.00'))
+    cambio = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal('0.00'))
+    saldo_pendiente = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal('0.00'))
     estado = models.TextField()
     fecha_vencimiento = models.DateTimeField(null=True, blank=True)
-    utilidad_total = models.FloatField(default=0)
+    utilidad_total = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal('0.00'))
 
 
 class ItemVenta(models.Model):
@@ -85,11 +86,11 @@ class ItemVenta(models.Model):
     venta = models.ForeignKey(Venta, on_delete=models.CASCADE, related_name='items')
     producto = models.ForeignKey(Producto, null=True, blank=True, on_delete=models.SET_NULL, related_name='items_ventas')
     descripcion = models.TextField(null=True, blank=True)
-    cantidad = models.FloatField()
-    precio_unitario = models.FloatField()
-    costo_unitario = models.FloatField(default=0)
-    subtotal = models.FloatField()
-    utilidad = models.FloatField(default=0)
+    cantidad = models.DecimalField(max_digits=12, decimal_places=2)
+    precio_unitario = models.DecimalField(max_digits=12, decimal_places=2)
+    costo_unitario = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal('0.00'))
+    subtotal = models.DecimalField(max_digits=12, decimal_places=2)
+    utilidad = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal('0.00'))
     tipo_pago = models.TextField(default='EFECTIVO')
 
 
@@ -99,7 +100,7 @@ class Abono(models.Model):
     empresa = models.ForeignKey(Empresa, on_delete=models.CASCADE, related_name='abonos')
     venta = models.ForeignKey(Venta, on_delete=models.CASCADE, related_name='abonos')
     fecha = models.DateTimeField()
-    valor = models.FloatField()
+    valor = models.DecimalField(max_digits=12, decimal_places=2)
     metodo_pago = models.TextField(null=True, blank=True)
     usuario = models.ForeignKey(Usuario, null=True, blank=True, on_delete=models.SET_NULL, related_name='abonos')
 
@@ -112,10 +113,10 @@ class Kardex(models.Model):
     producto = models.ForeignKey(Producto, on_delete=models.CASCADE, related_name='kardex')
     sucursal = models.ForeignKey('usuarios.Sucursal', on_delete=models.CASCADE, related_name='kardex')
     tipo_movimiento = models.TextField()
-    cantidad = models.FloatField()
-    costo_unitario = models.FloatField()
-    stock_anterior = models.FloatField()
-    stock_resultante = models.FloatField()
+    cantidad = models.DecimalField(max_digits=12, decimal_places=2)
+    costo_unitario = models.DecimalField(max_digits=12, decimal_places=2)
+    stock_anterior = models.DecimalField(max_digits=12, decimal_places=2)
+    stock_resultante = models.DecimalField(max_digits=12, decimal_places=2)
     referencia = models.TextField(null=True, blank=True)
     fecha = models.DateTimeField(auto_now_add=True)
     usuario = models.ForeignKey(Usuario, null=True, blank=True, on_delete=models.SET_NULL)
@@ -128,7 +129,7 @@ class MovimientoCaja(models.Model):
     tipo = models.TextField()
     concepto = models.TextField(null=True, blank=True)
     referencia = models.TextField(null=True, blank=True)
-    monto = models.FloatField()
+    monto = models.DecimalField(max_digits=12, decimal_places=2)
     fecha = models.DateTimeField()
 
 
@@ -137,8 +138,8 @@ class AuditoriaDescuento(models.Model):
         db_table = "auditoria_descuento"
     empresa = models.ForeignKey(Empresa, on_delete=models.CASCADE, related_name='auditoria_descuentos')
     venta = models.ForeignKey(Venta, on_delete=models.CASCADE, related_name='auditoria_descuentos')
-    descuento_anterior = models.FloatField()
-    descuento_nuevo = models.FloatField()
+    descuento_anterior = models.DecimalField(max_digits=12, decimal_places=2)
+    descuento_nuevo = models.DecimalField(max_digits=12, decimal_places=2)
     usuario_solicito = models.ForeignKey(Usuario, null=True, blank=True, on_delete=models.SET_NULL, related_name='auditoria_descuentos_solicito')
     usuario_autorizo = models.ForeignKey(Usuario, null=True, blank=True, on_delete=models.SET_NULL, related_name='auditoria_descuentos_autorizo')
     fecha = models.DateTimeField()

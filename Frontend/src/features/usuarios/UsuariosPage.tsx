@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useAuth } from '../../contexts/AuthContext';
+import { useAuth } from '../../hooks/useAuth';
 import { isAdminUser } from '../../utils/permissions';
 import TabUsuarios from './components/TabUsuarios';
 import TabRoles    from './components/TabRoles';

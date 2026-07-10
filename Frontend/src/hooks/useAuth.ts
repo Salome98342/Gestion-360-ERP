@@ -1,3 +1,13 @@
-﻿// Estado de auth gestionado globalmente por AuthContext.
-// Este archivo se mantiene por compatibilidad con imports existentes.
-export { useAuth, getAccessToken } from '../contexts/AuthContext';
+﻿import { useContext } from 'react';
+import { AuthContext } from '../contexts/authContextInternal';
+import { getAccessToken } from '../contexts/authTokenStore';
+
+
+export function useAuth() {
+	const ctx = useContext(AuthContext);
+	if (!ctx) throw new Error('useAuth debe usarse dentro de <AuthProvider>');
+	return ctx;
+}
+
+
+export { getAccessToken };

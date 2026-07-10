@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Search, Plus, Edit2, Power, X } from 'lucide-react';
 import { usuariosService } from '../../../services/usuariosService';
-import { useAuth } from '../../../contexts/AuthContext';
+import { useAuth } from '../../../hooks/useAuth';
 import { canCreate, canEdit } from '../../../utils/permissions';
 import { confirmAction, notifyError, notifySuccess } from '../../../utils/notify';
 import type { UsuarioRead, UsuarioWrite, Rol, Sucursal } from '../../../types/usuarios';
@@ -44,7 +44,11 @@ export default function TabUsuarios() {
     finally { setLoading(false); }
   }, []);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    queueMicrotask(() => {
+      void load();
+    });
+  }, [load]);
 
   const filtered = usuarios.filter(u =>
     `${u.nombre} ${u.username} ${u.correo ?? ''}`.toLowerCase().includes(search.toLowerCase())

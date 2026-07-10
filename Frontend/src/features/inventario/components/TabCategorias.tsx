@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Search, Plus, Edit2, Trash2, X } from 'lucide-react';
 import { inventarioService } from '../../../services/inventarioService';
-import { useAuth } from '../../../contexts/AuthContext';
+import { useAuth } from '../../../hooks/useAuth';
 import { canCreate, canEdit, canDelete } from '../../../utils/permissions';
 import { confirmAction, notifyError, notifySuccess } from '../../../utils/notify';
 import type { Categoria } from '../../../types/inventario';
@@ -23,7 +23,11 @@ export default function TabCategorias() {
     catch { /* silently */ }
     finally { setLoading(false); }
   }, []);
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    queueMicrotask(() => {
+      void load();
+    });
+  }, [load]);
 
   const filtered = cats.filter(c => c.nombre.toLowerCase().includes(search.toLowerCase()));
 

@@ -31,10 +31,15 @@ class EmpresaScopedViewSetMixin:
 
     def get_empresa_id(self):
         user = getattr(self.request, 'user', None)
+        if getattr(user, 'is_superuser', False):
+            return None
         return getattr(user, 'empresa_id', None)
 
     def get_queryset(self):
         qs = super().get_queryset()
+        user = getattr(self.request, 'user', None)
+        if getattr(user, 'is_superuser', False):
+            return qs
         empresa_id = self.get_empresa_id()
         if not empresa_id:
             return qs.none()
@@ -134,6 +139,11 @@ class EmpresaScopedViewSetMixin:
 
     def perform_create(self, serializer):
         user = getattr(self.request, 'user', None)
+        if getattr(user, 'is_superuser', False):
+            instance = serializer.save()
+            self.registrar_auditoria('create', instance)
+            return
+
         empresa_id = getattr(user, 'empresa_id', None)
         if not empresa_id:
             raise PermissionDenied('No hay una empresa asociada a la sesion.')

@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Search, Plus, Edit2, X } from 'lucide-react';
 import { inventarioService } from '../../../services/inventarioService';
-import { useAuth } from '../../../contexts/AuthContext';
+import { useAuth } from '../../../hooks/useAuth';
 import { canCreate, canEdit } from '../../../utils/permissions';
 import { notifySuccess } from '../../../utils/notify';
 import type { Proveedor } from '../../../types/inventario';
@@ -23,7 +23,11 @@ export default function TabProveedores() {
     catch { /* silently */ }
     finally { setLoading(false); }
   }, []);
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    queueMicrotask(() => {
+      void load();
+    });
+  }, [load]);
 
   const filtered = list.filter(p => p.nombre.toLowerCase().includes(search.toLowerCase()));
   const f = (k: string) => (e: React.ChangeEvent<HTMLInputElement|HTMLSelectElement>) => setForm(p => ({...p, [k]: e.target.value}));

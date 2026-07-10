@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Plus, RotateCcw } from 'lucide-react';
-import { useAuth } from '../../contexts/AuthContext';
+import { useAuth } from '../../hooks/useAuth';
 import { reportesService } from '../../services/reportesService';
 import type { Caja, MovimientoCaja } from '../../types/reportes';
 import { ApiHttpError, isLicenseErrorData, licenseErrorMessage } from '../../utils/httpError';
@@ -82,7 +82,9 @@ export default function MovimientosCajaPage() {
   }, []);
 
   useEffect(() => {
-    load();
+    queueMicrotask(() => {
+      void load();
+    });
   }, [load]);
 
   const cajaAbiertaUsuario = useMemo(() => {

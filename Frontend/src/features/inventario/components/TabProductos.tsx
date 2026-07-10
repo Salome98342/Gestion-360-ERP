@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Search, Plus, Edit2, Trash2, X } from 'lucide-react';
 import { inventarioService } from '../../../services/inventarioService';
-import { useAuth } from '../../../contexts/AuthContext';
+import { useAuth } from '../../../hooks/useAuth';
 import { canCreate, canEdit, canDelete } from '../../../utils/permissions';
 import type { Producto, ProductoWrite, Categoria, Proveedor } from '../../../types/inventario';
 import type { Sucursal } from '../../../types/usuarios';

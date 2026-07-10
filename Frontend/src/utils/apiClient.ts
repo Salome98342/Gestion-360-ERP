@@ -1,4 +1,4 @@
-import { getAccessToken, setAccessToken } from '../contexts/AuthContext';
+import { getAccessToken, setAccessToken } from '../contexts/authTokenStore';
 import { authService } from '../services/authService';
 import { ApiHttpError, buildApiErrorMessage, isLicenseErrorData, licenseErrorMessage } from './httpError';
 import Swal from 'sweetalert2';
@@ -10,6 +10,37 @@ const BASE_URL = import.meta.env.VITE_API_BASE_URL as string;
 // Un único Promise compartido para todos los requests que necesiten refrescar
 // el token al mismo tiempo (evita múltiples llamadas a /auth/refresh/).
 let _pendingRefresh: Promise<string> | null = null;
+let _isRedirectingToLogin = false;
+
+
+function redirectToLogin() {
+  if (_isRedirectingToLogin) return;
+  _isRedirectingToLogin = true;
+  window.location.href = '/login';
+}
+
+
+async function handleLicenseBlock(err: Record<string, unknown> | null) {
+  const statusValue = typeof err?.status === 'string'
+    ? String(err.status)
+    : String(err?.status ?? '');
+
+  const fv = err?.fecha_vencimiento;
+  const exp = typeof fv === 'string' ? fv : null;
+  const expText = exp
+    ? `\nFecha de vencimiento: ${new Date(exp).toLocaleString('es-CO', { dateStyle: 'short', timeStyle: 'short' })}`
+    : '';
+
+  await Swal.fire({
+    icon: 'warning',
+    title: 'Licencia no activa',
+    text: `${licenseErrorMessage(statusValue)}${expText}`,
+    confirmButtonText: 'Entendido',
+  });
+
+  setAccessToken(null);
+  redirectToLogin();
+}
 
 function refreshAccessToken(): Promise<string> {
   if (_pendingRefresh) return _pendingRefresh;
@@ -55,14 +86,14 @@ async function request<T>(method: Method, path: string, body?: unknown): Promise
       });
     } catch {
       setAccessToken(null);
-      window.location.href = '/login';
+      redirectToLogin();
       throw new Error('Sesión expirada. Redirigiendo al login...');
     }
   }
 
   if (response.status === 401) {
     setAccessToken(null);
-    window.location.href = '/login';
+    redirectToLogin();
     throw new Error('Sesión expirada.');
   }
 
@@ -71,25 +102,7 @@ async function request<T>(method: Method, path: string, body?: unknown): Promise
 
     // Licencia vencida/inhabilitada (señal para cerrar sesión + mostrar alerta)
     if (response.status === 403 && isLicenseErrorData(err)) {
-      const statusValue = typeof (err as Record<string, unknown>)?.status === 'string'
-        ? String((err as Record<string, unknown>).status)
-        : String((err as Record<string, unknown>)?.status ?? '');
-
-      const fv = (err as Record<string, unknown>)?.fecha_vencimiento;
-      const exp = typeof fv === 'string' ? fv : null;
-      const expText = exp
-        ? `\nFecha de vencimiento: ${new Date(exp).toLocaleString('es-CO', { dateStyle: 'short', timeStyle: 'short' })}`
-        : '';
-
-      await Swal.fire({
-        icon: 'warning',
-        title: 'Licencia no activa',
-        text: `${licenseErrorMessage(statusValue)}${expText}`,
-        confirmButtonText: 'Entendido',
-      });
-
-      setAccessToken(null);
-      window.location.href = '/login';
+      await handleLicenseBlock(err);
     }
 
     throw new ApiHttpError(response.status, buildApiErrorMessage(response.status, err), err);
@@ -120,13 +133,22 @@ async function download(path: string): Promise<Blob> {
       });
     } catch {
       setAccessToken(null);
-      window.location.href = '/login';
+      redirectToLogin();
       throw new Error('Sesion expirada. Redirigiendo al login...');
     }
   }
 
+  if (response.status === 401) {
+    setAccessToken(null);
+    redirectToLogin();
+    throw new Error('Sesión expirada.');
+  }
+
   if (!response.ok) {
     const err = await response.json().catch(() => null) as Record<string, unknown> | null;
+    if (response.status === 403 && isLicenseErrorData(err)) {
+      await handleLicenseBlock(err);
+    }
     throw new ApiHttpError(response.status, buildApiErrorMessage(response.status, err), err);
   }
 

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Outlet, NavLink, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard,
@@ -14,9 +14,10 @@ import {
   LogOut,
   ChevronRight,
 } from 'lucide-react';
-import { useAuth } from '../contexts/AuthContext';
+import { useAuth } from '../hooks/useAuth';
 import { canView, isAdminUser } from '../utils/permissions';
 import type { ModuleKey } from '../types/usuarios';
+import { empresasService } from '../services/empresasService';
 import { reportesService } from '../services/reportesService';
 import { usuariosService } from '../services/usuariosService';
 import type { AdminRealtimeNotification } from '../services/usuariosService';
@@ -48,6 +49,7 @@ export default function MainLayout() {
   const navigate         = useNavigate();
   const [notifOpen, setNotifOpen] = useState(false);
   const [notifications, setNotifications] = useState<Array<{ title: string; detail: string; date: string }>>([]);
+  const companyNameRef = useRef('Gestión 360');
   const admin = useMemo(() => isAdminUser(user), [user]);
 
   const handleLogout = async () => {
@@ -59,14 +61,21 @@ export default function MainLayout() {
 
   useEffect(() => {
     if (!user || !admin) {
-      setNotifications([]);
+      queueMicrotask(() => {
+        setNotifications([]);
+      });
       return;
     }
 
     let mounted = true;
-    Promise.all([usuariosService.listLogs({ limit: 100 }), reportesService.listEventos()])
-      .then(([logs, eventos]) => {
+    Promise.all([
+      usuariosService.listLogs({ limit: 100 }),
+      reportesService.listEventos(),
+      empresasService.getEmpresa(user.empresa_id),
+    ])
+      .then(([logs, eventos, empresa]) => {
         if (!mounted) return;
+        companyNameRef.current = empresa?.nombre?.trim() || 'Gestión 360';
         const fromEvents = eventos
           .filter((evento) => {
             const delta = new Date(evento.fecha).getTime() - Date.now();
@@ -89,15 +98,30 @@ export default function MainLayout() {
       })
       .catch(() => {
         if (!mounted) return;
+        companyNameRef.current = 'Gestión 360';
         setNotifications([]);
       });
 
-    const showBackgroundAlert = (title: string, detail: string) => {
+    const showBackgroundAlert = (
+      title: string,
+      detail: string,
+      payload: AdminRealtimeNotification,
+    ) => {
       if (!('Notification' in window)) return;
       if (document.visibilityState !== 'hidden') return;
       if (Notification.permission !== 'granted') return;
+
+      const header = payload.kind === 'evento'
+        ? `${companyNameRef.current} · Recordatorio`
+        : `${companyNameRef.current} · Panel administrativo`;
+
       try {
-        new Notification(title, { body: detail });
+        new Notification(header, {
+          body: `${title}\n${detail}`,
+          icon: logo360,
+          badge: logo360,
+          tag: `${payload.kind}-${payload.id}`,
+        });
       } catch {
         // Silencioso para evitar errores de runtime en navegadores restringidos.
       }
@@ -118,7 +142,7 @@ export default function MainLayout() {
               date: payload.fecha,
             }
           : {
-              title: payload.accion || 'Actividad',
+              title: payload.accion || 'Actividad reciente',
               detail: `${payload.usuario_nombre || 'Usuario'} · ${payload.modulo || 'general'}`,
               date: payload.fecha,
             };
@@ -130,7 +154,7 @@ export default function MainLayout() {
           return [mapped, ...prev].slice(0, 20);
         });
 
-        showBackgroundAlert(mapped.title, mapped.detail);
+        showBackgroundAlert(mapped.title, mapped.detail, payload);
       },
       () => {
         // Si el stream falla, mantenemos el panel con los datos ya cargados.

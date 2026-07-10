@@ -19,21 +19,21 @@ from .serializers import (
 
 class CategoriaViewSet(EmpresaScopedViewSetMixin, viewsets.ModelViewSet):
     modulo = 'inventario'
-    permission_classes = [RolPermission]
+    permission_classes = [RolPermission, LicenciaPermission]
     queryset = Categoria.objects.all()
     serializer_class = CategoriaSerializer
 
 
 class TipoClienteViewSet(EmpresaScopedViewSetMixin, viewsets.ModelViewSet):
     modulo = 'inventario'
-    permission_classes = [RolPermission]
+    permission_classes = [RolPermission, LicenciaPermission]
     queryset = TipoCliente.objects.all()
     serializer_class = TipoClienteSerializer
 
 
 class ClienteViewSet(EmpresaScopedViewSetMixin, viewsets.ModelViewSet):
     modulo = 'ventas'
-    permission_classes = [RolPermission]
+    permission_classes = [RolPermission, LicenciaPermission]
     queryset = Cliente.objects.select_related('tipo_cliente').all()
     serializer_class = ClienteSerializer
     filter_backends = [DjangoFilterBackend, filters.SearchFilter]
@@ -43,7 +43,7 @@ class ClienteViewSet(EmpresaScopedViewSetMixin, viewsets.ModelViewSet):
 
 class ProveedorViewSet(EmpresaScopedViewSetMixin, viewsets.ModelViewSet):
     modulo = 'compras'
-    permission_classes = [RolPermission]
+    permission_classes = [RolPermission, LicenciaPermission]
     queryset = Proveedor.objects.all()
     serializer_class = ProveedorSerializer
     filter_backends = [DjangoFilterBackend, filters.SearchFilter]
@@ -77,7 +77,7 @@ class ProductoViewSet(EmpresaScopedViewSetMixin, viewsets.ModelViewSet):
 
 class CajaViewSet(EmpresaScopedViewSetMixin, viewsets.ModelViewSet):
     modulo = 'caja'
-    permission_classes = [RolPermission]
+    permission_classes = [RolPermission, LicenciaPermission]
     queryset = Caja.objects.all()
     serializer_class = CajaSerializer
     filter_backends = [DjangoFilterBackend]

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Bell, CalendarDays, ChartColumnBig, CircleAlert, Plus } from 'lucide-react';
-import { useAuth } from '../../contexts/AuthContext';
+import { useAuth } from '../../hooks/useAuth';
 import { ventasService } from '../../services/ventasService';
 import { inventarioService } from '../../services/inventarioService';
 import { usuariosService } from '../../services/usuariosService';
@@ -67,6 +67,7 @@ export default function ReportesPage() {
   const [savingEvento, setSavingEvento] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [renderNow] = useState(() => Date.now());
 
   const [eventoForm, setEventoForm] = useState<EventoForm>({
     titulo: '',
@@ -99,7 +100,9 @@ export default function ReportesPage() {
   }, []);
 
   useEffect(() => {
-    loadData();
+    queueMicrotask(() => {
+      void loadData();
+    });
   }, [loadData]);
 
   const ventasTotales = useMemo(() => ventas.reduce((acc, venta) => acc + venta.total, 0), [ventas]);
@@ -151,7 +154,7 @@ export default function ReportesPage() {
 
     const proximosEventos = eventos
       .filter((e) => {
-        const diff = new Date(e.fecha).getTime() - Date.now();
+        const diff = new Date(e.fecha).getTime() - renderNow;
         return diff >= 0 && diff <= 7 * 24 * 60 * 60 * 1000;
       })
       .slice(0, 4)
@@ -174,7 +177,7 @@ export default function ReportesPage() {
     return [...lowStock, ...pendientes, ...proximosEventos, ...actividad]
       .sort((a, b) => +new Date(b.fecha) - +new Date(a.fecha))
       .slice(0, 14);
-  }, [eventos, logs, productos, ventas]);
+  }, [eventos, logs, productos, renderNow, ventas]);
 
   const alertStats = useMemo(() => {
     const critica = notificaciones.filter((n) => n.nivel === 'critica').length;

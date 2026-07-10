@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Plus, Search, Trash2, X } from 'lucide-react';
-import { useAuth } from '../../contexts/AuthContext';
+import { useAuth } from '../../hooks/useAuth';
 import { canCreate } from '../../utils/permissions';
 import { ventasService } from '../../services/ventasService';
 import { inventarioService } from '../../services/inventarioService';
@@ -70,7 +70,11 @@ export default function ComprasPage() {
     }
   }, [filtEstado]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    queueMicrotask(() => {
+      void load();
+    });
+  }, [load]);
 
   const filtered = compras.filter((compra) =>
     compra.proveedor_nombre.toLowerCase().includes(search.toLowerCase()) ||

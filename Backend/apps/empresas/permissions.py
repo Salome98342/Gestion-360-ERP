@@ -87,6 +87,8 @@ class LicenciaPermission(BasePermission):
 
     def has_permission(self, request, view):
         user = getattr(request, 'user', None)
+        if getattr(user, 'is_superuser', False):
+            return True
         empresa_id = getattr(user, 'empresa_id', None) if user else None
 
         payload = get_license_block_payload(empresa_id)

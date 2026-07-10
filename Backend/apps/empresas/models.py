@@ -1,3 +1,4 @@
+from decimal import Decimal
 from django.db import models
 
 
@@ -10,7 +11,7 @@ class Empresa(models.Model):
     direccion = models.TextField(null=True, blank=True)
     telefono = models.TextField(null=True, blank=True)
     moneda = models.TextField(default='COP')
-    porcentaje_impuesto = models.FloatField(default=0)
+    porcentaje_impuesto = models.DecimalField(max_digits=5, decimal_places=2, default=Decimal('0.00'))
     activa = models.IntegerField(default=1)
 
 
@@ -56,7 +57,7 @@ class RenovacionLicencia(models.Model):
     fecha_renovacion = models.DateTimeField(auto_now_add=True)
     meses_agregados = models.IntegerField()
     nueva_fecha_vencimiento = models.DateTimeField()
-    monto_pagado = models.FloatField(default=0)
+    monto_pagado = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal('0.00'))
     observacion = models.TextField(null=True, blank=True)
 
     def __str__(self):

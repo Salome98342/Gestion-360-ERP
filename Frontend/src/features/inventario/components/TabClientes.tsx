@@ -20,7 +20,11 @@ export default function TabClientes() {
     } catch { /* silently */ }
     finally { setLoading(false); }
   }, []);
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    queueMicrotask(() => {
+      void load();
+    });
+  }, [load]);
 
   const tipoMap = Object.fromEntries(tipos.map(t => [t.id, t.nombre]));
   const filtered = clientes.filter(c => {

@@ -11,7 +11,20 @@ class Migration(migrations.Migration):
 
     operations = [
         migrations.SeparateDatabaseAndState(
-            database_operations=[],
+            database_operations=[
+                migrations.AlterModelTable(
+                    name='empresa',
+                    table='empresa',
+                ),
+                migrations.AlterModelTable(
+                    name='licenciatoken',
+                    table='licencia_token',
+                ),
+                migrations.AlterModelTable(
+                    name='renovacionlicencia',
+                    table='renovacion_licencia',
+                ),
+            ],
             state_operations=[
                 migrations.AlterModelTable(
                     name='empresa',

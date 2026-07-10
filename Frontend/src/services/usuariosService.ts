@@ -1,8 +1,8 @@
 import { api } from '../utils/apiClient';
-import { getAccessToken } from '../contexts/AuthContext';
 import type { UsuarioRead, UsuarioWrite, Rol, Sucursal, LogActividad } from '../types/usuarios';
+import type { EventoEmpresa } from '../types/reportes';
 
-const BASE_URL = import.meta.env.VITE_API_BASE_URL as string;
+const ADMIN_NOTIFICATIONS_POLL_MS = 30000;
 
 export interface AdminRealtimeNotification {
   kind: 'log' | 'evento';
@@ -62,29 +62,74 @@ export const usuariosService = {
     onNotification: (payload: AdminRealtimeNotification) => void,
     onError?: () => void,
   ) => {
-    const token = getAccessToken();
-    if (!token || !BASE_URL) return null;
+    let active = true;
+    let inFlight = false;
+    let lastSeenLogId = 0;
+    const seenEventIds = new Set<number>();
 
-    const url = `${BASE_URL}/log-actividad/stream/?access_token=${encodeURIComponent(token)}&ventana_minutos=120`;
-    const source = new EventSource(url, { withCredentials: false });
-
-    const parseEvent = (event: MessageEvent) => {
+    const emitSnapshot = async () => {
+      if (!active || inFlight) return;
+      inFlight = true;
       try {
-        const payload = JSON.parse(event.data) as AdminRealtimeNotification;
-        onNotification(payload);
+        const [logs, eventos] = await Promise.all([
+          usuariosService.listLogs({ limit: 20 }),
+          api.get<EventoEmpresa[]>('/eventos-empresa/'),
+        ]);
+
+        if (!active) return;
+
+        logs
+          .slice()
+          .sort((a, b) => a.id - b.id)
+          .forEach((log) => {
+            if (log.id <= lastSeenLogId) return;
+            lastSeenLogId = log.id;
+            onNotification({
+              kind: 'log',
+              id: log.id,
+              fecha: log.fecha,
+              accion: log.accion,
+              descripcion: log.descripcion,
+              modulo: log.modulo,
+              usuario_nombre: log.usuario_nombre,
+            });
+          });
+
+        const now = Date.now();
+        const futureWindow = now + (120 * 60 * 1000);
+        eventos
+          .filter((evento) => evento.completado === 0)
+          .sort((a, b) => +new Date(a.fecha) - +new Date(b.fecha))
+          .forEach((evento) => {
+            const eventAt = new Date(evento.fecha).getTime();
+            if (eventAt < now || eventAt > futureWindow || seenEventIds.has(evento.id)) return;
+            seenEventIds.add(evento.id);
+            onNotification({
+              kind: 'evento',
+              id: evento.id,
+              fecha: evento.fecha,
+              titulo: evento.titulo,
+              descripcion: evento.descripcion,
+              tipo: evento.tipo,
+            });
+          });
       } catch {
-        // Silencioso para no romper el stream por payload inválido.
+        if (onError) onError();
+      } finally {
+        inFlight = false;
       }
     };
 
-    source.addEventListener('log', parseEvent as EventListener);
-    source.addEventListener('evento', parseEvent as EventListener);
-    source.onerror = () => {
-      if (onError) onError();
-    };
+    void emitSnapshot();
+    const timer = window.setInterval(() => {
+      void emitSnapshot();
+    }, ADMIN_NOTIFICATIONS_POLL_MS);
 
     return {
-      close: () => source.close(),
+      close: () => {
+        active = false;
+        window.clearInterval(timer);
+      },
     };
   },
 };

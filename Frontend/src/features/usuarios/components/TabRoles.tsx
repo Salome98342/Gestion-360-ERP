@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Plus, Edit2, Trash2, X } from 'lucide-react';
 import { usuariosService } from '../../../services/usuariosService';
-import { useAuth } from '../../../contexts/AuthContext';
+import { useAuth } from '../../../hooks/useAuth';
 import { canCreate, canEdit, canDelete } from '../../../utils/permissions';
 import {
   SYSTEM_MODULES, SYSTEM_ACTIONS,
@@ -31,7 +31,11 @@ export default function TabRoles() {
     finally { setLoading(false); }
   }, []);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    queueMicrotask(() => {
+      void load();
+    });
+  }, [load]);
 
   const openCreate = () => {
     setEditing(null);

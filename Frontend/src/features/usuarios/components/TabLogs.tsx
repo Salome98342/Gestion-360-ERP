@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { usuariosService } from '../../../services/usuariosService';
 import { SYSTEM_MODULES } from '../../../types/usuarios';
 import type { LogActividad, UsuarioRead } from '../../../types/usuarios';
-import { useAuth } from '../../../contexts/AuthContext';
+import { useAuth } from '../../../hooks/useAuth';
 import { isAdminUser } from '../../../utils/permissions';
 
 function fmtDate(iso: string) {
@@ -51,7 +51,11 @@ export default function TabLogs() {
     usuariosService.listUsuarios().then(setUsuarios).catch(() => {});
   }, [admin]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    queueMicrotask(() => {
+      void load();
+    });
+  }, [load]);
 
   useEffect(() => {
     if (!admin) return;

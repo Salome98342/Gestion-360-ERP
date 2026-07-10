@@ -5,7 +5,7 @@ import type { ModuleKey, ActionKey } from '../types/usuarios';
  * Verifica si el usuario tiene un permiso específico sobre un módulo.
  *
  * Regla de acceso:
- *   • rol.permisos = null/vacío → acceso completo (rol admin sin restricciones aún configuradas)
+ *   • rol.permisos = null/vacío → acceso denegado
  *   • rol.permisos con JSON     → se comprueba el campo exacto
  */
 export function can(
@@ -17,16 +17,20 @@ export function can(
 
   const raw = user.rol.permisos;
 
-  // Rol sin permisos configurados → acceso completo (estado admin inicial)
-  if (raw == null) return true;
+  if (raw == null) return false;
   if (typeof raw !== 'string') {
     const perms = raw as Record<string, Record<string, boolean>>;
+    if ((perms as Record<string, unknown>).__admin__ === true) return true;
     return perms[module]?.[action] ?? false;
   }
-  if (raw.trim() === '') return true;
+  if (raw.trim() === '') return false;
+
+  const txt = raw.trim().toLowerCase();
+  if (txt === 'all' || txt === '*' || txt === 'admin') return true;
 
   try {
-    const perms = JSON.parse(raw) as Record<string, Record<string, boolean>>;
+    const perms = JSON.parse(raw) as Record<string, Record<string, boolean>> & { __admin__?: boolean };
+    if (perms.__admin__ === true) return true;
     return perms[module]?.[action] ?? false;
   } catch {
     return false;
@@ -39,11 +43,11 @@ export function isAdminUser(user: AuthUser | null): boolean {
   if (roleName.includes('admin')) return true;
 
   const raw = user.rol.permisos;
-  if (raw == null) return true;
+  if (raw == null) return false;
 
   if (typeof raw === 'string') {
     const txt = raw.trim().toLowerCase();
-    if (txt === '' || txt === 'all' || txt === '*' || txt === 'admin') return true;
+    if (txt === 'all' || txt === '*' || txt === 'admin') return true;
     try {
       const parsed = JSON.parse(raw) as Record<string, unknown>;
       return parsed.__admin__ === true;

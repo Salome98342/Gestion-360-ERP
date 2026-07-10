@@ -9,7 +9,7 @@ import {
   ShoppingCart,
   Wallet,
 } from 'lucide-react';
-import { useAuth } from '../../contexts/AuthContext';
+import { useAuth } from '../../hooks/useAuth';
 import { dashboardService } from '../../services/dashboardService';
 import type { Venta, Compra } from '../../types/ventas';
 import type { Producto } from '../../types/inventario';
@@ -43,32 +43,35 @@ export default function DashboardPage() {
   const [eventos, setEventos] = useState<EventoEmpresa[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [renderNow] = useState(() => Date.now());
 
   useEffect(() => {
     let mounted = true;
-    setLoading(true);
-    setError(null);
-    dashboardService.loadDashboard()
-      .then((data) => {
-        if (!mounted) return;
-        setVentas(data.ventas);
-        setCompras(data.compras);
-        setProductos(data.productos);
-        setLogs(data.logs);
-        setEventos(data.eventos);
-      })
-      .catch((err) => {
-        if (!mounted) return;
-        if (err instanceof ApiHttpError && err.status === 403 && isLicenseErrorData(err.data)) {
-          setError(licenseErrorMessage(String(err.data?.status ?? '')));
-          return;
-        }
-        setError('No se pudieron cargar los indicadores del dashboard.');
-      })
-      .finally(() => {
-        if (!mounted) return;
-        setLoading(false);
-      });
+    queueMicrotask(() => {
+      setLoading(true);
+      setError(null);
+      dashboardService.loadDashboard()
+        .then((data) => {
+          if (!mounted) return;
+          setVentas(data.ventas);
+          setCompras(data.compras);
+          setProductos(data.productos);
+          setLogs(data.logs);
+          setEventos(data.eventos);
+        })
+        .catch((err) => {
+          if (!mounted) return;
+          if (err instanceof ApiHttpError && err.status === 403 && isLicenseErrorData(err.data)) {
+            setError(licenseErrorMessage(String(err.data?.status ?? '')));
+            return;
+          }
+          setError('No se pudieron cargar los indicadores del dashboard.');
+        })
+        .finally(() => {
+          if (!mounted) return;
+          setLoading(false);
+        });
+    });
     return () => { mounted = false; };
   }, []);
 
@@ -98,9 +101,9 @@ export default function DashboardPage() {
   }, [compras]);
 
   const proximosEventos = useMemo(() => eventos
-    .filter((evento) => new Date(evento.fecha).getTime() >= Date.now())
+    .filter((evento) => new Date(evento.fecha).getTime() >= renderNow)
     .sort((a, b) => +new Date(a.fecha) - +new Date(b.fecha))
-    .slice(0, 3), [eventos]);
+    .slice(0, 3), [eventos, renderNow]);
 
   const kpis = [
     {

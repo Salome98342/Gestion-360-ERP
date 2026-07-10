@@ -1,5 +1,6 @@
 from rest_framework import serializers
 from decimal import Decimal
+from django.db import IntegrityError, transaction
 from django.utils import timezone
 
 from .models import (
@@ -203,7 +204,13 @@ class CajaSerializer(serializers.ModelSerializer):
             
         validated_data['fecha_apertura'] = timezone.now()
         validated_data['estado'] = Caja.EstadoCaja.ABIERTA
-        return super().create(validated_data)
+        try:
+            with transaction.atomic():
+                return super().create(validated_data)
+        except IntegrityError as exc:
+            raise serializers.ValidationError(
+                'Ya existe una caja abierta para este usuario y sucursal.'
+            ) from exc
 
     def update(self, instance, validated_data):
         nuevo_estado = validated_data.get('estado')
